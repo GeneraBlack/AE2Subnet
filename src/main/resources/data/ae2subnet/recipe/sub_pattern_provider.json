@@ -6,15 +6,9 @@
     " I "
   ],
   "key": {
-    "A": {
-      "item": "ae2:cable_anchor"
-    },
-    "Q": {
-      "item": "ae2:quartz_fiber"
-    },
-    "I": {
-      "item": "minecraft:iron_ingot"
-    }
+    "A": "ae2:cable_anchor",
+    "Q": "ae2:quartz_fiber",
+    "I": "minecraft:iron_ingot"
   },
   "result": {
     "count": 4,

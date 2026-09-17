@@ -7,10 +7,8 @@ import com.ae2subnet.blockentity.MasterPatternProviderBlockEntity;
 import com.ae2subnet.init.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
@@ -21,13 +19,13 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
 public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternProviderBlockEntity> {
 
-    public static final DirectionProperty SUBNET_FACING = DirectionProperty.create("facing", Direction.values());
+    public static final EnumProperty<Direction> SUBNET_FACING = EnumProperty.create("facing", Direction.class);
     public static final BooleanProperty ONLINE = BooleanProperty.create("online");
 
     public MasterPatternProviderBlock(Properties props) {
@@ -78,8 +76,8 @@ public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternP
     }
 
     @Override
-    protected ItemInteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos,
-                                              Player player, InteractionHand hand, BlockHitResult hit) {
+    protected InteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos,
+                                          Player player, InteractionHand hand, BlockHitResult hit) {
         if (InteractionUtil.canWrenchRotate(heldItem)) {
             Direction current = state.getValue(SUBNET_FACING);
             Direction next = Direction.from3DDataValue((current.get3DDataValue() + 1) % 6);
@@ -93,7 +91,7 @@ public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternP
                 be.onFacingChanged();
                 be.markForUpdate();
             }
-            return ItemInteractionResult.sidedSuccess(level.isClientSide());
+            return InteractionResult.SUCCESS;
         }
         return super.useItemOn(heldItem, state, level, pos, player, hand, hit);
     }
@@ -106,25 +104,8 @@ public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternP
             if (!level.isClientSide()) {
                 be.openMenu(player, MenuLocators.forBlockEntity(be));
             }
-            return InteractionResult.sidedSuccess(level.isClientSide());
+            return InteractionResult.SUCCESS;
         }
         return InteractionResult.PASS;
-    }
-
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
-        if (!state.is(newState.getBlock())) {
-            var be = getBlockEntity(level, pos);
-            if (be != null) {
-                var inv = be.getPatternInventory();
-                for (int i = 0; i < inv.size(); i++) {
-                    ItemStack stack = inv.getStackInSlot(i);
-                    if (!stack.isEmpty()) {
-                        Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), stack);
-                    }
-                }
-            }
-        }
-        super.onRemove(state, level, pos, newState, isMoving);
     }
 }

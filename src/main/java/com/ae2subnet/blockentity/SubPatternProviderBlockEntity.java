@@ -23,17 +23,22 @@ import com.ae2subnet.api.WorkerState;
 import com.ae2subnet.block.SubPatternProviderBlock;
 import com.ae2subnet.init.ModBlockEntities;
 import com.ae2subnet.init.ModItems;
+import appeng.api.stacks.GenericStack;
+import appeng.util.InsertionOnlyResourceHandlerWithJournal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import net.neoforged.neoforge.capabilities.Capabilities;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.TransferPreconditions;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.item.ItemResource;
+import net.neoforged.neoforge.transfer.transaction.Transaction;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -61,8 +66,14 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     protected IManagedGridNode createMainNode() {
         return super.createMainNode()
                 .setVisualRepresentation(ModItems.SUB_PATTERN_PROVIDER.get())
+                .addService(ISubnetWorker.class, this)
                 .addService(IGridTickable.class, this)
                 .setIdlePowerUsage(0.5);
+    }
+
+    @Override
+    public java.util.Set<Direction> getGridConnectableSides(appeng.api.orientation.BlockOrientation orientation) {
+        return EnumSet.complementOf(EnumSet.of(getMachineFacing()));
     }
 
     public Direction getMachineFacing() {
@@ -78,8 +89,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     public void onFacingChanged() {
-        Direction machineFacing = getMachineFacing();
-        getMainNode().setExposedOnSides(EnumSet.complementOf(EnumSet.of(machineFacing)));
+        onGridConnectableSidesChanged();
     }
 
     @Nullable
@@ -93,8 +103,8 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
 
     @Override
     public void onReady() {
+        onGridConnectableSidesChanged();
         super.onReady();
-        onFacingChanged();
         markFree();
         markForUpdate();
     }
@@ -122,8 +132,8 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     @Override
-    public void saveAdditional(CompoundTag data, HolderLookup.Provider registries) {
-        super.saveAdditional(data, registries);
+    public void saveAdditional(ValueOutput data) {
+        super.saveAdditional(data);
         data.putString("workerState", state.name());
         data.putString("unlockMode", unlockMode.name());
         data.putBoolean("autoPull", autoPull);
@@ -131,28 +141,24 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     @Override
-    public void loadTag(CompoundTag data, HolderLookup.Provider registries) {
-        super.loadTag(data, registries);
-        if (data.contains("workerState")) {
+    public void loadTag(ValueInput data) {
+        super.loadTag(data);
+        data.getString("workerState").ifPresent(val -> {
             try {
-                this.state = WorkerState.valueOf(data.getString("workerState"));
+                this.state = WorkerState.valueOf(val);
             } catch (Exception ignored) {
                 this.state = WorkerState.FREE;
             }
-        }
-        if (data.contains("unlockMode")) {
+        });
+        data.getString("unlockMode").ifPresent(val -> {
             try {
-                this.unlockMode = UnlockMode.valueOf(data.getString("unlockMode"));
+                this.unlockMode = UnlockMode.valueOf(val);
             } catch (Exception ignored) {
                 this.unlockMode = UnlockMode.ON_OUTPUT_RETURN;
             }
-        }
-        if (data.contains("autoPull")) {
-            this.autoPull = data.getBoolean("autoPull");
-        }
-        if (data.contains("busyHoldTicks")) {
-            this.busyHoldTicks = data.getInt("busyHoldTicks");
-        }
+        });
+        this.autoPull = data.getBooleanOr("autoPull", false);
+        this.busyHoldTicks = data.getIntOr("busyHoldTicks", 0);
     }
 
     public com.ae2subnet.api.SubnetDisplayStatus getDisplayStatus() {
@@ -307,84 +313,47 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         }
     }
 
-    private final IItemHandler returnItemHandler = new IItemHandler() {
+    private final ResourceHandler<ItemResource> returnItemHandler = new InsertionOnlyResourceHandlerWithJournal<ItemResource, GenericStack>(ItemResource.EMPTY) {
         @Override
-        public int getSlots() {
-            return 1;
-        }
-
-        @Override
-        public @NotNull ItemStack getStackInSlot(int slot) {
-            return ItemStack.EMPTY;
-        }
-
-        @Override
-        public @NotNull ItemStack insertItem(int slot, @NotNull ItemStack stack, boolean simulate) {
-            if (stack.isEmpty()) {
-                return ItemStack.EMPTY;
+        public int insert(ItemResource resource, int amount, TransactionContext transaction) {
+            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+            if (pendingSideEffect != null) {
+                return 0;
             }
-            if (!simulate) {
-                handleOutputReturned(AEItemKey.of(stack), stack.getCount());
+            var what = AEItemKey.of(resource);
+            updateSnapshots(transaction);
+            pendingSideEffect = new GenericStack(what, amount);
+            return amount;
+        }
+
+        @Override
+        protected void onRootCommit(GenericStack originalState) {
+            if (pendingSideEffect != null) {
+                handleOutputReturned(pendingSideEffect.what(), pendingSideEffect.amount());
+                pendingSideEffect = null;
             }
-            return ItemStack.EMPTY;
-        }
-
-        @Override
-        public @NotNull ItemStack extractItem(int slot, int amount, boolean simulate) {
-            return ItemStack.EMPTY;
-        }
-
-        @Override
-        public int getSlotLimit(int slot) {
-            return 64;
-        }
-
-        @Override
-        public boolean isItemValid(int slot, @NotNull ItemStack stack) {
-            return true;
         }
     };
 
-    private final IFluidHandler returnFluidHandler = new IFluidHandler() {
+    private final ResourceHandler<FluidResource> returnFluidHandler = new InsertionOnlyResourceHandlerWithJournal<FluidResource, GenericStack>(FluidResource.EMPTY) {
         @Override
-        public int getTanks() {
-            return 1;
-        }
-
-        @Override
-        public @NotNull FluidStack getFluidInTank(int tank) {
-            return FluidStack.EMPTY;
-        }
-
-        @Override
-        public int getTankCapacity(int tank) {
-            return 64000;
-        }
-
-        @Override
-        public boolean isFluidValid(int tank, @NotNull FluidStack stack) {
-            return true;
-        }
-
-        @Override
-        public int fill(FluidStack resource, FluidAction action) {
-            if (resource.isEmpty()) {
+        public int insert(FluidResource resource, int amount, TransactionContext transaction) {
+            TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+            if (pendingSideEffect != null) {
                 return 0;
             }
-            if (action.execute()) {
-                handleOutputReturned(AEFluidKey.of(resource), resource.getAmount());
+            var what = AEFluidKey.of(resource);
+            updateSnapshots(transaction);
+            pendingSideEffect = new GenericStack(what, amount);
+            return amount;
+        }
+
+        @Override
+        protected void onRootCommit(GenericStack originalState) {
+            if (pendingSideEffect != null) {
+                handleOutputReturned(pendingSideEffect.what(), pendingSideEffect.amount());
+                pendingSideEffect = null;
             }
-            return resource.getAmount();
-        }
-
-        @Override
-        public @NotNull FluidStack drain(FluidStack resource, FluidAction action) {
-            return FluidStack.EMPTY;
-        }
-
-        @Override
-        public @NotNull FluidStack drain(int maxDrain, FluidAction action) {
-            return FluidStack.EMPTY;
         }
     };
 
@@ -404,7 +373,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     @Nullable
-    public IItemHandler getItemHandler(@Nullable Direction side) {
+    public ResourceHandler<ItemResource> getItemHandler(@Nullable Direction side) {
         if (side == getMachineFacing()) {
             return returnItemHandler;
         }
@@ -412,7 +381,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     @Nullable
-    public IFluidHandler getFluidHandler(@Nullable Direction side) {
+    public ResourceHandler<FluidResource> getFluidHandler(@Nullable Direction side) {
         if (side == getMachineFacing()) {
             return returnFluidHandler;
         }
@@ -432,11 +401,11 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
 
         // Strategy 1: Check if machine is empty
         if (unlockMode == UnlockMode.ON_MACHINE_EMPTY) {
-            var itemHandler = level.getCapability(Capabilities.ItemHandler.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
+            var itemHandler = level.getCapability(Capabilities.Item.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
             if (itemHandler != null) {
                 boolean empty = true;
-                for (int i = 0; i < itemHandler.getSlots(); i++) {
-                    if (!itemHandler.getStackInSlot(i).isEmpty()) {
+                for (int i = 0; i < itemHandler.size(); i++) {
+                    if (itemHandler.getAmountAsLong(i) > 0) {
                         empty = false;
                         break;
                     }
@@ -450,14 +419,19 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
 
         // Strategy 2: Active output pull fallback
         if (autoPull) {
-            var itemHandler = level.getCapability(Capabilities.ItemHandler.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
+            var itemHandler = level.getCapability(Capabilities.Item.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
             if (itemHandler != null) {
-                for (int i = 0; i < itemHandler.getSlots(); i++) {
-                    var sim = itemHandler.extractItem(i, 64, true);
-                    if (!sim.isEmpty()) {
-                        var extracted = itemHandler.extractItem(i, 64, false);
-                        handleOutputReturned(AEItemKey.of(extracted), extracted.getCount());
-                        return TickRateModulation.URGENT;
+                for (int i = 0; i < itemHandler.size(); i++) {
+                    var resource = itemHandler.getResource(i);
+                    if (!resource.isEmpty()) {
+                        try (var tx = Transaction.openRoot()) {
+                            int extracted = itemHandler.extract(i, resource, 64, tx);
+                            if (extracted > 0) {
+                                tx.commit();
+                                handleOutputReturned(AEItemKey.of(resource), extracted);
+                                return TickRateModulation.URGENT;
+                            }
+                        }
                     }
                 }
             }

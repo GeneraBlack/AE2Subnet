@@ -14,20 +14,34 @@ public class ModBlockEntities {
             DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, AE2Subnet.MOD_ID);
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<MasterPatternProviderBlockEntity>> MASTER_PATTERN_PROVIDER =
-            BLOCK_ENTITIES.register("master_pattern_provider", () ->
-                    BlockEntityType.Builder.of(
-                            MasterPatternProviderBlockEntity::new,
-                            ModBlocks.MASTER_PATTERN_PROVIDER.get()
-                    ).build(null)
-            );
+            BLOCK_ENTITIES.register("master_pattern_provider", () -> {
+                var type = new BlockEntityType<>(
+                        MasterPatternProviderBlockEntity::new,
+                        ModBlocks.MASTER_PATTERN_PROVIDER.get()
+                );
+                ModBlocks.MASTER_PATTERN_PROVIDER.get().setBlockEntity(
+                        MasterPatternProviderBlockEntity.class,
+                        type,
+                        null,
+                        null
+                );
+                return type;
+            });
 
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<SubPatternProviderBlockEntity>> SUB_PATTERN_PROVIDER =
-            BLOCK_ENTITIES.register("sub_pattern_provider", () ->
-                    BlockEntityType.Builder.of(
-                            SubPatternProviderBlockEntity::new,
-                            ModBlocks.SUB_PATTERN_PROVIDER.get()
-                    ).build(null)
-            );
+            BLOCK_ENTITIES.register("sub_pattern_provider", () -> {
+                var type = new BlockEntityType<>(
+                        SubPatternProviderBlockEntity::new,
+                        ModBlocks.SUB_PATTERN_PROVIDER.get()
+                );
+                ModBlocks.SUB_PATTERN_PROVIDER.get().setBlockEntity(
+                        SubPatternProviderBlockEntity.class,
+                        type,
+                        null,
+                        (level, pos, state, entity) -> entity.serverTick()
+                );
+                return type;
+            });
 
     public static void register(IEventBus bus) {
         BLOCK_ENTITIES.register(bus);

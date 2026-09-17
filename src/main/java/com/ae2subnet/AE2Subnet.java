@@ -56,12 +56,12 @@ public class AE2Subnet {
 
         // Sub-pattern provider machine-facing return capabilities
         event.registerBlockEntity(
-                Capabilities.ItemHandler.BLOCK,
+                Capabilities.Item.BLOCK,
                 ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
                 (be, side) -> be.getItemHandler(side)
         );
         event.registerBlockEntity(
-                Capabilities.FluidHandler.BLOCK,
+                Capabilities.Fluid.BLOCK,
                 ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
                 (be, side) -> be.getFluidHandler(side)
         );

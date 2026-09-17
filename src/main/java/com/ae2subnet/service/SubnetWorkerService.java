@@ -12,91 +12,74 @@ import com.ae2subnet.api.WorkerState;
 import net.minecraft.nbt.CompoundTag;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Iterator;
-import java.util.Queue;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SubnetWorkerService implements ISubnetWorkerService, IGridServiceProvider {
 
     private final IGrid grid;
-    private final Set<ISubnetWorker> allWorkers = ConcurrentHashMap.newKeySet();
-    private final Queue<ISubnetWorker> idleQueue = new ConcurrentLinkedQueue<>();
+    private final Set<ISubnetWorker> allWorkers = new LinkedHashSet<>();
 
     public SubnetWorkerService(IGrid grid) {
         this.grid = grid;
     }
 
     @Override
-    public void addNode(IGridNode gridNode, @Nullable CompoundTag savedData) {
-        if (gridNode.getOwner() instanceof ISubnetWorker worker) {
+    public synchronized void addNode(IGridNode gridNode, @Nullable CompoundTag savedData) {
+        var worker = gridNode.getService(ISubnetWorker.class);
+        if (worker == null && gridNode.getOwner() instanceof ISubnetWorker w) {
+            worker = w;
+        }
+        if (worker != null) {
             registerWorker(worker);
         }
     }
 
     @Override
-    public void removeNode(IGridNode gridNode) {
-        if (gridNode.getOwner() instanceof ISubnetWorker worker) {
+    public synchronized void removeNode(IGridNode gridNode) {
+        var worker = gridNode.getService(ISubnetWorker.class);
+        if (worker == null && gridNode.getOwner() instanceof ISubnetWorker w) {
+            worker = w;
+        }
+        if (worker != null) {
             unregisterWorker(worker);
         }
     }
 
     @Override
     public synchronized void registerWorker(ISubnetWorker worker) {
-        if (allWorkers.add(worker)) {
-            if (worker.getWorkerState() == WorkerState.FREE) {
-                if (!idleQueue.contains(worker)) {
-                    idleQueue.offer(worker);
-                }
-            }
-        }
+        allWorkers.add(worker);
     }
 
     @Override
     public synchronized void unregisterWorker(ISubnetWorker worker) {
         allWorkers.remove(worker);
-        idleQueue.remove(worker);
     }
 
     @Override
     public synchronized void markOccupied(ISubnetWorker worker) {
-        idleQueue.remove(worker);
+        // State is tracked on worker directly
     }
 
     @Override
     public synchronized void markFree(ISubnetWorker worker) {
-        if (allWorkers.contains(worker) && worker.isValidWorker()) {
-            if (!idleQueue.contains(worker)) {
-                idleQueue.offer(worker);
-            }
-        }
+        // State is tracked on worker directly
     }
 
     @Override
     @Nullable
     public synchronized ISubnetWorker findAndClaimWorker(IPatternDetails patternDetails, KeyCounter[] inputHolder, IMasterPatternProvider master) {
-        Iterator<ISubnetWorker> it = idleQueue.iterator();
-        while (it.hasNext()) {
-            ISubnetWorker worker = it.next();
-            if (!worker.isValidWorker() || !allWorkers.contains(worker)) {
-                it.remove();
-                continue;
-            }
-
-            if (worker.getWorkerState() != WorkerState.FREE) {
-                it.remove();
-                continue;
-            }
-
-            if (worker.canAcceptInputs(inputHolder)) {
-                it.remove();
-                boolean success = worker.pushInputs(patternDetails, inputHolder, master);
-                if (success) {
-                    return worker;
-                } else {
-                    // Re-offer if push failed unexpectedly
-                    idleQueue.offer(worker);
+        for (var worker : new ArrayList<>(allWorkers)) {
+            if (worker.isValidWorker() && worker.getWorkerState() == WorkerState.FREE) {
+                if (worker.canAcceptInputs(inputHolder)) {
+                    boolean success = worker.pushInputs(patternDetails, inputHolder, master);
+                    if (success) {
+                        // Rotate to back of set for fair round-robin load distribution
+                        allWorkers.remove(worker);
+                        allWorkers.add(worker);
+                        return worker;
+                    }
                 }
             }
         }
@@ -104,17 +87,35 @@ public class SubnetWorkerService implements ISubnetWorkerService, IGridServicePr
     }
 
     @Override
-    public int getTotalWorkerCount() {
-        return allWorkers.size();
+    public synchronized int getTotalWorkerCount() {
+        int count = 0;
+        for (var w : allWorkers) {
+            if (!w.isRemoved()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     @Override
-    public int getIdleWorkerCount() {
-        return idleQueue.size();
+    public synchronized int getIdleWorkerCount() {
+        int count = 0;
+        for (var w : allWorkers) {
+            if (w.isValidWorker() && w.getWorkerState() == WorkerState.FREE) {
+                count++;
+            }
+        }
+        return count;
     }
 
     @Override
-    public int getBusyWorkerCount() {
-        return Math.max(0, allWorkers.size() - idleQueue.size());
+    public synchronized int getBusyWorkerCount() {
+        int count = 0;
+        for (var w : allWorkers) {
+            if (w.isValidWorker() && w.getWorkerState() == WorkerState.OCCUPIED) {
+                count++;
+            }
+        }
+        return count;
     }
 }

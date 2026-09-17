@@ -29,11 +29,13 @@ import com.ae2subnet.init.ModItems;
 import com.ae2subnet.init.ModMenuTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.Containers;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -58,6 +60,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
 
     public MasterPatternProviderBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.MASTER_PATTERN_PROVIDER.get(), pos, blockState);
+        this.subnetNode.setExposedOnSides(EnumSet.of(getSubnetFacing()));
     }
 
     @Override
@@ -68,6 +71,11 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
                 .addService(ICraftingProvider.class, this)
                 .addService(IEnergyOverlayGridConnection.class, this::getSubnetEnergyServices)
                 .setIdlePowerUsage(2.0);
+    }
+
+    @Override
+    public java.util.Set<Direction> getGridConnectableSides(appeng.api.orientation.BlockOrientation orientation) {
+        return EnumSet.complementOf(EnumSet.of(getSubnetFacing()));
     }
 
     public boolean isOnline() {
@@ -110,9 +118,8 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     public void onFacingChanged() {
-        Direction subnetFacing = getSubnetFacing();
-        this.subnetNode.setExposedOnSides(EnumSet.of(subnetFacing));
-        this.getMainNode().setExposedOnSides(EnumSet.complementOf(EnumSet.of(subnetFacing)));
+        onGridConnectableSidesChanged();
+        this.subnetNode.setExposedOnSides(EnumSet.of(getSubnetFacing()));
         invalidateOverlayGrids();
     }
 
@@ -127,8 +134,9 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
 
     @Override
     public void onReady() {
-        super.onReady();
+        this.subnetNode.setExposedOnSides(EnumSet.of(getSubnetFacing()));
         this.subnetNode.create(getLevel(), getBlockPos());
+        super.onReady();
         this.onFacingChanged();
         this.updatePatterns();
         invalidateOverlayGrids();
@@ -150,19 +158,32 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     @Override
-    public void saveAdditional(CompoundTag data, HolderLookup.Provider registries) {
-        super.saveAdditional(data, registries);
-        this.subnetNode.saveToNBT(data);
-        this.patternInventory.writeToNBT(data, "patterns", registries);
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        if (level != null && !level.isClientSide()) {
+            for (int i = 0; i < patternInventory.size(); i++) {
+                ItemStack stack = patternInventory.getStackInSlot(i);
+                if (!stack.isEmpty()) {
+                    Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), stack);
+                }
+            }
+        }
+        super.preRemoveSideEffects(pos, state);
+    }
+
+    @Override
+    public void saveAdditional(ValueOutput data) {
+        super.saveAdditional(data);
+        this.subnetNode.serialize(data);
+        this.patternInventory.writeToNBT(data, "patterns");
         data.putInt("priority", this.priority);
     }
 
     @Override
-    public void loadTag(CompoundTag data, HolderLookup.Provider registries) {
-        super.loadTag(data, registries);
-        this.subnetNode.loadFromNBT(data);
-        this.patternInventory.readFromNBT(data, "patterns", registries);
-        this.priority = data.getInt("priority");
+    public void loadTag(ValueInput data) {
+        super.loadTag(data);
+        this.subnetNode.deserialize(data);
+        this.patternInventory.readFromNBT(data, "patterns");
+        this.priority = data.getIntOr("priority", 0);
         if (hasLevel()) {
             this.updatePatterns();
         }

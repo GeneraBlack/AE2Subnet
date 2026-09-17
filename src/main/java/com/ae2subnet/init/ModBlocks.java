@@ -13,20 +13,22 @@ import net.neoforged.neoforge.registries.DeferredRegister;
 public class ModBlocks {
     public static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks(AE2Subnet.MOD_ID);
 
-    public static final DeferredBlock<MasterPatternProviderBlock> MASTER_PATTERN_PROVIDER = BLOCKS.register(
+    public static final DeferredBlock<MasterPatternProviderBlock> MASTER_PATTERN_PROVIDER = BLOCKS.registerBlock(
             "master_pattern_provider",
-            () -> new MasterPatternProviderBlock(BlockBehaviour.Properties.of()
+            MasterPatternProviderBlock::new,
+            props -> props
                     .strength(2.2f, 11.0f)
                     .sound(SoundType.METAL)
-                    .requiresCorrectToolForDrops())
+                    .requiresCorrectToolForDrops()
     );
 
-    public static final DeferredBlock<SubPatternProviderBlock> SUB_PATTERN_PROVIDER = BLOCKS.register(
+    public static final DeferredBlock<SubPatternProviderBlock> SUB_PATTERN_PROVIDER = BLOCKS.registerBlock(
             "sub_pattern_provider",
-            () -> new SubPatternProviderBlock(BlockBehaviour.Properties.of()
+            SubPatternProviderBlock::new,
+            props -> props
                     .strength(2.2f, 11.0f)
                     .sound(SoundType.METAL)
-                    .requiresCorrectToolForDrops())
+                    .requiresCorrectToolForDrops()
     );
 
     public static void register(IEventBus bus) {

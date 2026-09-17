@@ -10,8 +10,8 @@
 
 <p align="center">
   <a href="https://github.com/GeneraBlack/AE2Subnet/releases"><img src="https://img.shields.io/github/v/release/GeneraBlack/AE2Subnet?color=00E5FF&label=Release" alt="Release"/></a>
-  <img src="https://img.shields.io/badge/Minecraft-1.21.1-brightgreen" alt="Minecraft 1.21.1"/>
-  <img src="https://img.shields.io/badge/NeoForge-21.1+-orange" alt="NeoForge 21.1+"/>
+  <img src="https://img.shields.io/badge/Minecraft-26.1.2-brightgreen" alt="Minecraft 26.1.2"/>
+  <img src="https://img.shields.io/badge/NeoForge-26.1+-orange" alt="NeoForge 26.1+"/>
   <img src="https://img.shields.io/badge/License-MIT-blue" alt="MIT License"/>
 </p>
 

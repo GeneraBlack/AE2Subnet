@@ -6,7 +6,9 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 
-@EventBusSubscriber(value = Dist.CLIENT, bus = EventBusSubscriber.Bus.MOD)
+import com.ae2subnet.AE2Subnet;
+
+@EventBusSubscriber(modid = AE2Subnet.MOD_ID, value = Dist.CLIENT)
 public class ClientSetup {
 
     @SubscribeEvent

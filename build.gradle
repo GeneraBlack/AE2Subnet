@@ -1,7 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.91'
+    id 'net.neoforged.moddev' version '2.0.147'
 }
 
 version = mod_version
@@ -11,7 +11,7 @@ base {
     archivesName = mod_id
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 repositories {
     mavenLocal()
@@ -40,11 +40,6 @@ repositories {
 neoForge {
     version = project.neo_version
 
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
-    }
-
     runs {
         client {
             client()
@@ -66,9 +61,10 @@ neoForge {
 }
 
 dependencies {
-    implementation "appeng:appliedenergistics2:${project.ae2_version}"
-    implementation "maven.modrinth:guideme:${project.guideme_version}"
+    implementation "org.appliedenergistics:appliedenergistics2:${project.ae2_version}"
+    implementation "org.appliedenergistics:guideme:${project.guideme_version}"
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 test {

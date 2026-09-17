@@ -5,7 +5,7 @@ import com.ae2subnet.AE2Subnet;
 import com.ae2subnet.blockentity.MasterPatternProviderBlockEntity;
 import com.ae2subnet.menu.MasterPatternProviderMenu;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.MenuType;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -18,7 +18,7 @@ public class ModMenuTypes {
     public static final DeferredHolder<MenuType<?>, MenuType<MasterPatternProviderMenu>> MASTER_PATTERN_PROVIDER =
             MENU_TYPES.register("master_pattern_provider", () ->
                     MenuTypeBuilder.create(MasterPatternProviderMenu::new, MasterPatternProviderBlockEntity.class)
-                            .buildUnregistered(ResourceLocation.fromNamespaceAndPath(AE2Subnet.MOD_ID, "master_pattern_provider"))
+                            .buildUnregistered(Identifier.fromNamespaceAndPath(AE2Subnet.MOD_ID, "master_pattern_provider"))
             );
 
     public static void register(IEventBus bus) {

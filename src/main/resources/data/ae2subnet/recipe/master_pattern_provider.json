@@ -6,18 +6,10 @@
     " C "
   ],
   "key": {
-    "P": {
-      "item": "ae2:pattern_provider"
-    },
-    "Q": {
-      "item": "ae2:quartz_fiber"
-    },
-    "F": {
-      "item": "ae2:fluix_crystal"
-    },
-    "C": {
-      "item": "ae2:calculation_processor"
-    }
+    "P": "ae2:pattern_provider",
+    "Q": "ae2:quartz_fiber",
+    "F": "ae2:fluix_crystal",
+    "C": "ae2:calculation_processor"
   },
   "result": {
     "count": 1,

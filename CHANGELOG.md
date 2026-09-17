@@ -4,6 +4,26 @@ All notable changes to the **AE2 Sub-Pattern Provider** mod will be documented i
 
 ---
 
+## [2.0.0] - 2026-09-17
+
+### Release for Minecraft 26.1.2 (NeoForge 26.1.2.109 / AE2 26.1.11-beta / Java 25)
+
+* **Ported to Minecraft 26.1.2**:
+  * Compiled with Java 25 and NeoForge 26.1.2.109.
+  * Native compatibility with Applied Energistics 2 `26.1.11-beta`+.
+  * Upgraded to NeoForge transfer capability system (`Capabilities.Item.BLOCK`, `Capabilities.Fluid.BLOCK`).
+* **Persistence & Grid Connection Fixes**:
+  * Fixed grid node exposed sides and network separation across world reloads.
+  * Self-healing subnet worker service with round-robin load distribution that never drops workers across chunk unloads or power cycles.
+  * Registered server block entity tickers for hold-time and animation synchronization.
+* **UI & Visual Polish**:
+  * Fixed text opacity in Master Pattern Provider UI for Minecraft 26's ARGB text renderer.
+  * Added 26.1 item model definitions for inventory and hotbar display.
+* **Recipes**:
+  * Updated crafting recipes to Minecraft 26 format.
+
+---
+
 ## [1.0.0] - 2026-09-17
 
 ### Initial Release for Minecraft 1.21.1 (NeoForge)

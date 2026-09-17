@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "ae2subnet:item/sub_pattern_provider"
+  }
+}
