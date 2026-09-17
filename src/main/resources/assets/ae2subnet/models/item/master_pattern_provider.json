@@ -1,3 +1,3 @@
 {
-  "parent": "ae2subnet:block/master_pattern_provider"
+  "parent": "ae2subnet:block/master_pattern_provider_online"
 }

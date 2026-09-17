@@ -1,10 +1,73 @@
 {
   "variants": {
-    "facing=north": { "model": "ae2subnet:block/sub_pattern_provider" },
-    "facing=south": { "model": "ae2subnet:block/sub_pattern_provider", "y": 180 },
-    "facing=west":  { "model": "ae2subnet:block/sub_pattern_provider", "y": 270 },
-    "facing=east":  { "model": "ae2subnet:block/sub_pattern_provider", "y": 90 },
-    "facing=up":    { "model": "ae2subnet:block/sub_pattern_provider", "x": 270 },
-    "facing=down":  { "model": "ae2subnet:block/sub_pattern_provider", "x": 90 }
+    "facing=north,status=idle": {
+      "model": "ae2subnet:block/sub_pattern_provider_idle"
+    },
+    "facing=north,status=busy": {
+      "model": "ae2subnet:block/sub_pattern_provider_busy"
+    },
+    "facing=north,status=offline": {
+      "model": "ae2subnet:block/sub_pattern_provider_offline"
+    },
+    "facing=south,status=idle": {
+      "model": "ae2subnet:block/sub_pattern_provider_idle",
+      "y": 180
+    },
+    "facing=south,status=busy": {
+      "model": "ae2subnet:block/sub_pattern_provider_busy",
+      "y": 180
+    },
+    "facing=south,status=offline": {
+      "model": "ae2subnet:block/sub_pattern_provider_offline",
+      "y": 180
+    },
+    "facing=west,status=idle": {
+      "model": "ae2subnet:block/sub_pattern_provider_idle",
+      "y": 270
+    },
+    "facing=west,status=busy": {
+      "model": "ae2subnet:block/sub_pattern_provider_busy",
+      "y": 270
+    },
+    "facing=west,status=offline": {
+      "model": "ae2subnet:block/sub_pattern_provider_offline",
+      "y": 270
+    },
+    "facing=east,status=idle": {
+      "model": "ae2subnet:block/sub_pattern_provider_idle",
+      "y": 90
+    },
+    "facing=east,status=busy": {
+      "model": "ae2subnet:block/sub_pattern_provider_busy",
+      "y": 90
+    },
+    "facing=east,status=offline": {
+      "model": "ae2subnet:block/sub_pattern_provider_offline",
+      "y": 90
+    },
+    "facing=up,status=idle": {
+      "model": "ae2subnet:block/sub_pattern_provider_idle",
+      "x": 270
+    },
+    "facing=up,status=busy": {
+      "model": "ae2subnet:block/sub_pattern_provider_busy",
+      "x": 270
+    },
+    "facing=up,status=offline": {
+      "model": "ae2subnet:block/sub_pattern_provider_offline",
+      "x": 270
+    },
+    "facing=down,status=idle": {
+      "model": "ae2subnet:block/sub_pattern_provider_idle",
+      "x": 90
+    },
+    "facing=down,status=busy": {
+      "model": "ae2subnet:block/sub_pattern_provider_busy",
+      "x": 90
+    },
+    "facing=down,status=offline": {
+      "model": "ae2subnet:block/sub_pattern_provider_offline",
+      "x": 90
+    }
   }
 }

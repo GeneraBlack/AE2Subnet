@@ -9,19 +9,20 @@ import net.minecraft.world.entity.player.Inventory;
 
 public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterPatternProviderMenu> {
 
-    private static final ResourceLocation TEXTURE = ResourceLocation.withDefaultNamespace("textures/gui/container/generic_54.png");
+    private static final ResourceLocation TEXTURE =
+            ResourceLocation.fromNamespaceAndPath("ae2subnet", "textures/gui/master_pattern_provider.png");
 
     public MasterPatternProviderScreen(MasterPatternProviderMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
-        this.imageWidth = 176;
-        this.imageHeight = 166;
+        this.imageWidth = 210;
+        this.imageHeight = 230;
     }
 
     @Override
     protected void init() {
         super.init();
-        this.titleLabelX = 8;
-        this.titleLabelY = 6;
+        this.leftPos = (this.width - this.imageWidth) / 2;
+        this.topPos = (this.height - this.imageHeight) / 2;
     }
 
     @Override
@@ -32,20 +33,31 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        guiGraphics.drawString(this.font, this.title, this.titleLabelX, this.titleLabelY, 0x404040, false);
+        // Top Header
+        guiGraphics.drawString(this.font, Component.literal("Master Pattern Provider"), 10, 6, 0xE0E0E0, false);
+        guiGraphics.drawString(this.font, Component.literal("● 1 Channel").withColor(0x00E5FF), 140, 6, 0x00E5FF, false);
 
-        // Render worker statistics
-        String workerStats = String.format("Sub-Providers: %d (Idle: %d, Busy: %d)",
-                menu.totalWorkers, menu.idleWorkers, menu.busyWorkers);
-        guiGraphics.drawString(this.font, workerStats, 8, 58, 0x207020, false);
+        // Telemetry HUD
+        String statusStr = menu.totalWorkers > 0 ? "§a● SUBNET ONLINE" : "§c○ NO WORKERS";
+        guiGraphics.drawString(this.font, statusStr, 16, 24, 0xFFFFFF, false);
+        guiGraphics.drawString(this.font, "Power: §bBridged", 125, 24, 0xFFFFFF, false);
 
-        guiGraphics.drawString(this.font, this.playerInventoryTitle, this.inventoryLabelX, this.inventoryLabelY, 0x404040, false);
+        String workerCount = "Workers: §f" + menu.totalWorkers;
+        guiGraphics.drawString(this.font, workerCount, 16, 38, 0xFFFFFF, false);
+
+        String workerStates = "Idle: §a" + menu.idleWorkers + " §7| Busy: §6" + menu.busyWorkers;
+        guiGraphics.drawString(this.font, workerStates, 95, 38, 0xFFFFFF, false);
+
+        String prioStr = "Priority: §e" + menu.priority;
+        guiGraphics.drawString(this.font, prioStr, 16, 51, 0xFFFFFF, false);
+
+        // Section Labels
+        guiGraphics.drawString(this.font, Component.literal("Processing Patterns (16 Slots)"), 34, 69, 0x8E8E9E, false);
+        guiGraphics.drawString(this.font, this.playerInventoryTitle, 26, 125, 0x8E8E9E, false);
     }
 
     @Override
     protected void renderBg(GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
-        int x = (this.width - this.imageWidth) / 2;
-        int y = (this.height - this.imageHeight) / 2;
-        guiGraphics.blit(TEXTURE, x, y, 0, 0, this.imageWidth, this.imageHeight);
+        guiGraphics.blit(TEXTURE, this.leftPos, this.topPos, 0, 0, this.imageWidth, this.imageHeight);
     }
 }

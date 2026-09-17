@@ -147,7 +147,18 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         }
     }
 
+    public com.ae2subnet.api.SubnetDisplayStatus getDisplayStatus() {
+        if (!getMainNode().isActive()) {
+            return com.ae2subnet.api.SubnetDisplayStatus.OFFLINE;
+        }
+        return state == WorkerState.FREE ? com.ae2subnet.api.SubnetDisplayStatus.IDLE : com.ae2subnet.api.SubnetDisplayStatus.BUSY;
+    }
+
     @Override
+    public void onMainNodeStateChanged(appeng.api.networking.IGridNodeListener.State state) {
+        super.onMainNodeStateChanged(state);
+        markForUpdate();
+    }
     public WorkerState getWorkerState() {
         return state;
     }
@@ -235,6 +246,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
             }
         }
         saveChanges();
+        markForUpdate();
     }
 
     @Override
@@ -248,6 +260,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
             }
         }
         saveChanges();
+        markForUpdate();
     }
 
     private final IItemHandler returnItemHandler = new IItemHandler() {

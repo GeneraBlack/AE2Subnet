@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "ae2subnet:master_pattern_provider",
+    "ae2subnet:sub_pattern_provider"
+  ]
+}

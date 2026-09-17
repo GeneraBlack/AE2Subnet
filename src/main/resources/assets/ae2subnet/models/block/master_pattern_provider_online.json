@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "ae2subnet:block/master_main_active",
+    "north": "ae2subnet:block/master_subnet_active",
+    "south": "ae2subnet:block/master_main_active",
+    "east": "ae2subnet:block/master_main_active",
+    "west": "ae2subnet:block/master_main_active",
+    "up": "ae2subnet:block/master_main_active",
+    "down": "ae2subnet:block/master_main_active"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "ae2subnet:block/sub_cable_offline",
+    "north": "ae2subnet:block/sub_machine_offline",
+    "south": "ae2subnet:block/sub_cable_offline",
+    "east": "ae2subnet:block/sub_cable_offline",
+    "west": "ae2subnet:block/sub_cable_offline",
+    "up": "ae2subnet:block/sub_cable_offline",
+    "down": "ae2subnet:block/sub_cable_offline"
+  }
+}

@@ -7,6 +7,7 @@ import com.ae2subnet.blockentity.MasterPatternProviderBlockEntity;
 import com.ae2subnet.init.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.ItemInteractionResult;
@@ -20,6 +21,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
@@ -27,11 +29,14 @@ import org.jetbrains.annotations.Nullable;
 public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternProviderBlockEntity> {
 
     public static final DirectionProperty SUBNET_FACING = BlockStateProperties.FACING;
+    public static final BooleanProperty ONLINE = BooleanProperty.create("online");
 
     public MasterPatternProviderBlock(Properties props) {
         super(props);
         setBlockEntity(MasterPatternProviderBlockEntity.class, null, null, null);
-        registerDefaultState(defaultBlockState().setValue(SUBNET_FACING, Direction.NORTH));
+        registerDefaultState(defaultBlockState()
+                .setValue(SUBNET_FACING, Direction.NORTH)
+                .setValue(ONLINE, false));
     }
 
     @Override
@@ -46,15 +51,22 @@ public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternP
     }
 
     @Override
+    protected BlockState updateBlockStateFromBlockEntity(BlockState state, MasterPatternProviderBlockEntity be) {
+        return state.setValue(ONLINE, be.isOnline());
+    }
+
+    @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         super.createBlockStateDefinition(builder);
-        builder.add(SUBNET_FACING);
+        builder.add(SUBNET_FACING, ONLINE);
     }
 
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return defaultBlockState().setValue(SUBNET_FACING, context.getNearestLookingDirection().getOpposite());
+        return defaultBlockState()
+                .setValue(SUBNET_FACING, context.getNearestLookingDirection().getOpposite())
+                .setValue(ONLINE, false);
     }
 
     @Override
@@ -84,5 +96,22 @@ public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternP
             return InteractionResult.sidedSuccess(level.isClientSide());
         }
         return InteractionResult.PASS;
+    }
+
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean isMoving) {
+        if (!state.is(newState.getBlock())) {
+            var be = getBlockEntity(level, pos);
+            if (be != null) {
+                var inv = be.getPatternInventory();
+                for (int i = 0; i < inv.size(); i++) {
+                    ItemStack stack = inv.getStackInSlot(i);
+                    if (!stack.isEmpty()) {
+                        Containers.dropItemStack(level, pos.getX(), pos.getY(), pos.getZ(), stack);
+                    }
+                }
+            }
+        }
+        super.onRemove(state, level, pos, newState, isMoving);
     }
 }

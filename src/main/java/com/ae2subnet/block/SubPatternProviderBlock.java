@@ -2,6 +2,7 @@ package com.ae2subnet.block;
 
 import appeng.block.AEBaseEntityBlock;
 import appeng.util.InteractionUtil;
+import com.ae2subnet.api.SubnetDisplayStatus;
 import com.ae2subnet.blockentity.SubPatternProviderBlockEntity;
 import com.ae2subnet.init.ModBlockEntities;
 import net.minecraft.core.BlockPos;
@@ -21,17 +22,21 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
 public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProviderBlockEntity> {
 
     public static final DirectionProperty MACHINE_FACING = BlockStateProperties.FACING;
+    public static final EnumProperty<SubnetDisplayStatus> STATUS = EnumProperty.create("status", SubnetDisplayStatus.class);
 
     public SubPatternProviderBlock(Properties props) {
         super(props);
         setBlockEntity(SubPatternProviderBlockEntity.class, null, null, null);
-        registerDefaultState(defaultBlockState().setValue(MACHINE_FACING, Direction.NORTH));
+        registerDefaultState(defaultBlockState()
+                .setValue(MACHINE_FACING, Direction.NORTH)
+                .setValue(STATUS, SubnetDisplayStatus.OFFLINE));
     }
 
     @Override
@@ -46,15 +51,22 @@ public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProvide
     }
 
     @Override
+    protected BlockState updateBlockStateFromBlockEntity(BlockState state, SubPatternProviderBlockEntity be) {
+        return state.setValue(STATUS, be.getDisplayStatus());
+    }
+
+    @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         super.createBlockStateDefinition(builder);
-        builder.add(MACHINE_FACING);
+        builder.add(MACHINE_FACING, STATUS);
     }
 
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return defaultBlockState().setValue(MACHINE_FACING, context.getClickedFace());
+        return defaultBlockState()
+                .setValue(MACHINE_FACING, context.getClickedFace())
+                .setValue(STATUS, SubnetDisplayStatus.OFFLINE);
     }
 
     @Override
@@ -79,9 +91,10 @@ public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProvide
         var be = getBlockEntity(level, pos);
         if (be != null && !level.isClientSide()) {
             Direction machineDir = state.getValue(MACHINE_FACING);
-            player.sendSystemMessage(Component.literal("§b[Sub-Pattern Provider]§r State: " +
-                    (be.getWorkerState().name().equals("FREE") ? "§aIDLE§r" : "§eBUSY§r") +
-                    " | Machine Facing: §6" + machineDir.getName() + "§r" +
+            player.sendSystemMessage(Component.literal("§b[Sub-Pattern Provider]§r Status: " +
+                    (be.getDisplayStatus() == SubnetDisplayStatus.IDLE ? "§aIDLE (Ready)§r" :
+                     be.getDisplayStatus() == SubnetDisplayStatus.BUSY ? "§6BUSY (Crafting)§r" : "§cOFFLINE§r") +
+                    " | Machine Facing: §e" + machineDir.getName().toUpperCase() + "§r" +
                     " | Unlock Mode: §7" + be.getUnlockMode().name() + "§r"));
             return InteractionResult.sidedSuccess(level.isClientSide());
         }

@@ -1,15 +1,56 @@
 package com.ae2subnet.menu;
 
+import appeng.api.crafting.PatternDetailsHelper;
 import appeng.menu.AEBaseMenu;
 import appeng.menu.SlotSemantics;
 import appeng.menu.guisync.GuiSync;
-import appeng.menu.slot.RestrictedInputSlot;
+import appeng.util.inv.AppEngInternalInventory;
 import com.ae2subnet.api.ISubnetWorkerService;
 import com.ae2subnet.blockentity.MasterPatternProviderBlockEntity;
 import com.ae2subnet.init.ModMenuTypes;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 
 public class MasterPatternProviderMenu extends AEBaseMenu {
+
+    public static class PatternSlot extends Slot {
+        private final AppEngInternalInventory inv;
+        private final int invSlot;
+
+        public PatternSlot(AppEngInternalInventory inv, int invSlot, int x, int y) {
+            super(new SimpleContainer(0), invSlot, x, y);
+            this.inv = inv;
+            this.invSlot = invSlot;
+        }
+
+        @Override
+        public boolean mayPlace(ItemStack stack) {
+            return !stack.isEmpty() && PatternDetailsHelper.isEncodedPattern(stack);
+        }
+
+        @Override
+        public ItemStack getItem() {
+            return inv.getStackInSlot(invSlot);
+        }
+
+        @Override
+        public void set(ItemStack stack) {
+            inv.setItemDirect(invSlot, stack);
+            setChanged();
+        }
+
+        @Override
+        public ItemStack remove(int amount) {
+            return inv.extractItem(invSlot, amount, false);
+        }
+
+        @Override
+        public int getMaxStackSize() {
+            return inv.getSlotLimit(invSlot);
+        }
+    }
 
     private final MasterPatternProviderBlockEntity host;
 
@@ -29,12 +70,32 @@ public class MasterPatternProviderMenu extends AEBaseMenu {
         super(ModMenuTypes.MASTER_PATTERN_PROVIDER.get(), id, playerInventory, host);
         this.host = host;
 
-        this.createPlayerInventorySlots(playerInventory);
-
+        // 16 Pattern slots (2 rows of 8)
         var patternInv = host.getPatternInventory();
         for (int i = 0; i < patternInv.size(); i++) {
-            this.addSlot(new RestrictedInputSlot(RestrictedInputSlot.PlacableItemType.PROVIDER_PATTERN, patternInv, i),
-                    SlotSemantics.ENCODED_PATTERN);
+            int col = i % 8;
+            int row = i / 8;
+            int x = 34 + col * 18;
+            int y = 79 + row * 18;
+
+            this.addSlot(new PatternSlot(patternInv, i, x, y), SlotSemantics.ENCODED_PATTERN);
+        }
+
+        // Player main inventory (3 rows of 9)
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 9; col++) {
+                int slotIndex = col + row * 9 + 9;
+                int x = 26 + col * 18;
+                int y = 137 + row * 18;
+                this.addSlot(new Slot(playerInventory, slotIndex, x, y), SlotSemantics.PLAYER_INVENTORY);
+            }
+        }
+
+        // Player hotbar (9 slots)
+        for (int col = 0; col < 9; col++) {
+            int x = 26 + col * 18;
+            int y = 197;
+            this.addSlot(new Slot(playerInventory, col, x, y), SlotSemantics.PLAYER_HOTBAR);
         }
     }
 

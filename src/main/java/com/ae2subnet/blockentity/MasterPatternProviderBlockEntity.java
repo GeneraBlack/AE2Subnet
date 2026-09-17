@@ -70,6 +70,15 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
                 .setIdlePowerUsage(2.0);
     }
 
+    public boolean isOnline() {
+        return getMainNode().isActive();
+    }
+
+    @Override
+    public void onMainNodeStateChanged(appeng.api.networking.IGridNodeListener.State state) {
+        super.onMainNodeStateChanged(state);
+        markForUpdate();
+    }
     public IManagedGridNode getSubnetNode() {
         return this.subnetNode;
     }
