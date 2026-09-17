@@ -67,6 +67,7 @@ neoForge {
 
 dependencies {
     implementation "appeng:appliedenergistics2:${project.ae2_version}"
+    implementation "maven.modrinth:guideme:${project.guideme_version}"
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
 }
 
