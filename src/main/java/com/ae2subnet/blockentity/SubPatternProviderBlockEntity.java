@@ -37,15 +37,18 @@ import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import appeng.blockentity.ServerTickingBlockEntity;
+
 import java.lang.ref.WeakReference;
 import java.util.EnumSet;
 
 public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
-        implements ISubnetWorker, IActionHost, IGridTickable {
+        implements ISubnetWorker, IActionHost, IGridTickable, ServerTickingBlockEntity {
 
     private WorkerState state = WorkerState.FREE;
     private UnlockMode unlockMode = UnlockMode.ON_OUTPUT_RETURN;
     private boolean autoPull = true;
+    private int busyHoldTicks = 0;
 
     private WeakReference<IMasterPatternProvider> activeMaster = null;
     private final IActionSource actionSource = new MachineSource(this::getActionableNode);
@@ -93,6 +96,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         super.onReady();
         onFacingChanged();
         markFree();
+        markForUpdate();
     }
 
     @Override
@@ -123,6 +127,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         data.putString("workerState", state.name());
         data.putString("unlockMode", unlockMode.name());
         data.putBoolean("autoPull", autoPull);
+        data.putInt("busyHoldTicks", busyHoldTicks);
     }
 
     @Override
@@ -145,13 +150,24 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         if (data.contains("autoPull")) {
             this.autoPull = data.getBoolean("autoPull");
         }
+        if (data.contains("busyHoldTicks")) {
+            this.busyHoldTicks = data.getInt("busyHoldTicks");
+        }
     }
 
     public com.ae2subnet.api.SubnetDisplayStatus getDisplayStatus() {
-        if (!getMainNode().isActive()) {
+        if (level != null && level.isClientSide()) {
+            if (getBlockState().hasProperty(SubPatternProviderBlock.STATUS)) {
+                return getBlockState().getValue(SubPatternProviderBlock.STATUS);
+            }
+        }
+        boolean hasPower = getMainNode().isReady() && (getMainNode().isOnline() || getMainNode().isPowered() || getMainNode().isActive());
+        if (!hasPower) {
             return com.ae2subnet.api.SubnetDisplayStatus.OFFLINE;
         }
-        return state == WorkerState.FREE ? com.ae2subnet.api.SubnetDisplayStatus.IDLE : com.ae2subnet.api.SubnetDisplayStatus.BUSY;
+        return (state == WorkerState.OCCUPIED || busyHoldTicks > 0)
+                ? com.ae2subnet.api.SubnetDisplayStatus.BUSY
+                : com.ae2subnet.api.SubnetDisplayStatus.IDLE;
     }
 
     @Override
@@ -246,12 +262,15 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
             }
         }
         saveChanges();
-        markForUpdate();
+        if (this.busyHoldTicks <= 0) {
+            markForUpdate();
+        }
     }
 
     @Override
     public void markOccupied() {
         this.state = WorkerState.OCCUPIED;
+        this.busyHoldTicks = 20;
         var grid = getMainNode().getGrid();
         if (grid != null) {
             var service = grid.getService(ISubnetWorkerService.class);
@@ -261,6 +280,15 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         }
         saveChanges();
         markForUpdate();
+    }
+
+    public void serverTick() {
+        if (this.busyHoldTicks > 0) {
+            this.busyHoldTicks--;
+            if (this.busyHoldTicks == 0 && this.state == WorkerState.FREE) {
+                markForUpdate();
+            }
+        }
     }
 
     private final IItemHandler returnItemHandler = new IItemHandler() {

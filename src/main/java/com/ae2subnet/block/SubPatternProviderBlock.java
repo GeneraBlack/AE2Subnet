@@ -17,6 +17,7 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -65,8 +66,22 @@ public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProvide
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
         return defaultBlockState()
-                .setValue(MACHINE_FACING, context.getClickedFace())
+                .setValue(MACHINE_FACING, context.getClickedFace().getOpposite())
                 .setValue(STATUS, SubnetDisplayStatus.OFFLINE);
+    }
+
+    @Nullable
+    @Override
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState blockState,
+                                                                  BlockEntityType<T> type) {
+        if (!level.isClientSide() && type == getBlockEntityType()) {
+            return (lvl, pos, state, be) -> {
+                if (be instanceof SubPatternProviderBlockEntity subBe) {
+                    subBe.serverTick();
+                }
+            };
+        }
+        return null;
     }
 
     @Override

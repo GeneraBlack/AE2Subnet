@@ -71,7 +71,12 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     public boolean isOnline() {
-        return getMainNode().isActive();
+        if (level != null && level.isClientSide()) {
+            return getBlockState().hasProperty(MasterPatternProviderBlock.ONLINE) && getBlockState().getValue(MasterPatternProviderBlock.ONLINE);
+        }
+        boolean mainOnline = getMainNode().isReady() && (getMainNode().isOnline() || getMainNode().isPowered() || getMainNode().isActive());
+        boolean subnetOnline = this.subnetNode.isReady() && (this.subnetNode.isOnline() || this.subnetNode.isPowered() || this.subnetNode.isActive());
+        return mainOnline || subnetOnline;
     }
 
     @Override
@@ -112,6 +117,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         this.subnetNode.create(getLevel(), getBlockPos());
         this.onFacingChanged();
         this.updatePatterns();
+        this.markForUpdate();
     }
 
     @Override
