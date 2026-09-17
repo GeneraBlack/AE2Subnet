@@ -1,0 +1,8 @@
+{
+  "block.ae2subnet.master_pattern_provider": "Master Pattern Provider",
+  "block.ae2subnet.sub_pattern_provider": "Sub-Pattern Provider",
+  "itemGroup.ae2subnet": "AE2 Sub-Pattern Provider",
+  "gui.ae2subnet.sub_providers": "Sub-Providers: %d",
+  "gui.ae2subnet.idle": "Idle: %d",
+  "gui.ae2subnet.busy": "Busy: %d"
+}

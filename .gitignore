@@ -1,0 +1,29 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!gradle/wrapper/gradle-wrapper.properties
+
+# Minecraft run directory & logs
+run/
+logs/
+*.log
+
+# IDE & Editor files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+bin/
+out/
+
+# OS specific
+Thumbs.db
+.DS_Store
+# Ignore jars except gradle wrapper
+*.jar
+!gradle/wrapper/gradle-wrapper.jar

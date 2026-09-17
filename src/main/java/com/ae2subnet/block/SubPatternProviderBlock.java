@@ -1,0 +1,76 @@
+package com.ae2subnet.block;
+
+import appeng.block.AEBaseEntityBlock;
+import appeng.util.InteractionUtil;
+import com.ae2subnet.blockentity.SubPatternProviderBlockEntity;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.phys.BlockHitResult;
+import org.jetbrains.annotations.Nullable;
+
+public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProviderBlockEntity> {
+
+    public static final DirectionProperty MACHINE_FACING = BlockStateProperties.FACING;
+
+    public SubPatternProviderBlock(Properties props) {
+        super(props);
+        registerDefaultState(defaultBlockState().setValue(MACHINE_FACING, Direction.NORTH));
+    }
+
+    @Override
+    protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
+        super.createBlockStateDefinition(builder);
+        builder.add(MACHINE_FACING);
+    }
+
+    @Nullable
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        return defaultBlockState().setValue(MACHINE_FACING, context.getClickedFace());
+    }
+
+    @Override
+    protected ItemInteractionResult useItemOn(ItemStack heldItem, BlockState state, Level level, BlockPos pos,
+                                              Player player, InteractionHand hand, BlockHitResult hit) {
+        if (InteractionUtil.canWrenchRotate(heldItem)) {
+            Direction current = state.getValue(MACHINE_FACING);
+            Direction next = Direction.from3DDataValue((current.get3DDataValue() + 1) % 6);
+            level.setBlockAndUpdate(pos, state.setValue(MACHINE_FACING, next));
+            var be = getBlockEntity(level, pos);
+            if (be != null) {
+                be.onFacingChanged();
+            }
+            return ItemInteractionResult.sidedSuccess(level.isClientSide());
+        }
+        return super.useItemOn(heldItem, state, level, pos, player, hand, hit);
+    }
+
+    @Override
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
+                                               BlockHitResult hitResult) {
+        var be = getBlockEntity(level, pos);
+        if (be != null && !level.isClientSide()) {
+            Direction machineDir = state.getValue(MACHINE_FACING);
+            player.sendSystemMessage(Component.literal("§b[Sub-Pattern Provider]§r State: " +
+                    (be.getWorkerState().name().equals("FREE") ? "§aIDLE§r" : "§eBUSY§r") +
+                    " | Machine Facing: §6" + machineDir.getName() + "§r" +
+                    " | Unlock Mode: §7" + be.getUnlockMode().name() + "§r"));
+            return InteractionResult.sidedSuccess(level.isClientSide());
+        }
+        return InteractionResult.sidedSuccess(level.isClientSide());
+    }
+}

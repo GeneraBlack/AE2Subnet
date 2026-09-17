@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " I ",
+    "QAQ",
+    " I "
+  ],
+  "key": {
+    "A": {
+      "item": "ae2:cable_anchor"
+    },
+    "Q": {
+      "item": "ae2:quartz_fiber"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "result": {
+    "count": 4,
+    "id": "ae2subnet:sub_pattern_provider"
+  }
+}

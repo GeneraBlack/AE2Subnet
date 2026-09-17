@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " Q ",
+    "FPF",
+    " C "
+  ],
+  "key": {
+    "P": {
+      "item": "ae2:pattern_provider"
+    },
+    "Q": {
+      "item": "ae2:quartz_fiber"
+    },
+    "F": {
+      "item": "ae2:fluix_crystal"
+    },
+    "C": {
+      "item": "ae2:calculation_processor"
+    }
+  },
+  "result": {
+    "count": 1,
+    "id": "ae2subnet:master_pattern_provider"
+  }
+}
