@@ -7,6 +7,7 @@ import com.ae2subnet.blockentity.SubPatternProviderBlockEntity;
 import com.ae2subnet.init.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.neoforged.neoforge.capabilities.Capabilities;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -21,7 +22,6 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.phys.BlockHitResult;
@@ -29,7 +29,7 @@ import org.jetbrains.annotations.Nullable;
 
 public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProviderBlockEntity> {
 
-    public static final DirectionProperty MACHINE_FACING = BlockStateProperties.FACING;
+    public static final DirectionProperty MACHINE_FACING = DirectionProperty.create("facing", Direction.values());
     public static final EnumProperty<SubnetDisplayStatus> STATUS = EnumProperty.create("status", SubnetDisplayStatus.class);
 
     public SubPatternProviderBlock(Properties props) {
@@ -62,11 +62,36 @@ public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProvide
         builder.add(MACHINE_FACING, STATUS);
     }
 
+    public static BlockPos getClickedTargetPos(BlockPos placementPos, Direction clickedFace, boolean replacingClickedOnBlock) {
+        return replacingClickedOnBlock ? placementPos : placementPos.relative(clickedFace.getOpposite());
+    }
+
+    public static Direction determinePlacementFacing(boolean isMachine, Direction clickedFace) {
+        return isMachine ? clickedFace.getOpposite() : clickedFace;
+    }
+
+    public static Direction determinePlacementFacing(BlockPlaceContext context) {
+        BlockPos targetPos = getClickedTargetPos(context.getClickedPos(), context.getClickedFace(), context.replacingClickedOnBlock());
+        return determinePlacementFacing(context.getLevel(), targetPos, context.getClickedFace());
+    }
+
+    public static Direction determinePlacementFacing(@Nullable Level level, BlockPos clickedPos, Direction clickedFace) {
+        if (level == null) {
+            return determinePlacementFacing(false, clickedFace);
+        }
+        boolean isMachine = level.getCapability(Capabilities.ItemHandler.BLOCK, clickedPos, clickedFace) != null
+                || level.getCapability(Capabilities.FluidHandler.BLOCK, clickedPos, clickedFace) != null
+                || level.getCapability(Capabilities.ItemHandler.BLOCK, clickedPos, null) != null
+                || level.getCapability(Capabilities.FluidHandler.BLOCK, clickedPos, null) != null;
+        return determinePlacementFacing(isMachine, clickedFace);
+    }
+
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
+        Direction facing = determinePlacementFacing(context);
         return defaultBlockState()
-                .setValue(MACHINE_FACING, context.getClickedFace().getOpposite())
+                .setValue(MACHINE_FACING, facing)
                 .setValue(STATUS, SubnetDisplayStatus.OFFLINE);
     }
 
@@ -90,10 +115,15 @@ public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProvide
         if (InteractionUtil.canWrenchRotate(heldItem)) {
             Direction current = state.getValue(MACHINE_FACING);
             Direction next = Direction.from3DDataValue((current.get3DDataValue() + 1) % 6);
-            level.setBlockAndUpdate(pos, state.setValue(MACHINE_FACING, next));
             var be = getBlockEntity(level, pos);
+            BlockState newState = state.setValue(MACHINE_FACING, next);
+            if (be != null) {
+                newState = updateBlockStateFromBlockEntity(newState, be);
+            }
+            level.setBlockAndUpdate(pos, newState);
             if (be != null) {
                 be.onFacingChanged();
+                be.markForUpdate();
             }
             return ItemInteractionResult.sidedSuccess(level.isClientSide());
         }

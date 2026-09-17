@@ -1,7 +1,6 @@
 package com.ae2subnet.blockentity;
 
 import appeng.api.config.Actionable;
-import appeng.api.config.PowerMultiplier;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.crafting.PatternDetailsHelper;
 import appeng.api.networking.GridFlags;
@@ -11,14 +10,13 @@ import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.crafting.ICraftingProvider;
 import appeng.api.networking.security.IActionHost;
 import appeng.api.networking.security.IActionSource;
-import appeng.api.networking.ticking.IGridTickable;
-import appeng.api.networking.ticking.TickRateModulation;
-import appeng.api.networking.ticking.TickingRequest;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import appeng.blockentity.grid.AENetworkedBlockEntity;
+import appeng.me.energy.IEnergyOverlayGridConnection;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.MachineSource;
+import appeng.me.service.EnergyService;
 import appeng.menu.MenuOpener;
 import appeng.menu.locator.MenuHostLocator;
 import appeng.util.inv.AppEngInternalInventory;
@@ -39,16 +37,18 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 
 public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
-        implements ICraftingProvider, IMasterPatternProvider, InternalInventoryHost, IActionHost, IGridTickable {
+        implements ICraftingProvider, IMasterPatternProvider, InternalInventoryHost, IActionHost {
 
     private final IManagedGridNode subnetNode = GridHelper.createManagedNode(this, BlockEntityNodeListener.INSTANCE)
             .setVisualRepresentation(ModItems.MASTER_PATTERN_PROVIDER.get())
             .setInWorldNode(true)
-            .setTagName("subnet_node");
+            .setTagName("subnet_node")
+            .addService(IEnergyOverlayGridConnection.class, this::getMainEnergyServices);
 
     private final AppEngInternalInventory patternInventory = new AppEngInternalInventory(this, 16);
     private final List<IPatternDetails> patterns = new ArrayList<>();
@@ -66,7 +66,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
                 .setVisualRepresentation(ModItems.MASTER_PATTERN_PROVIDER.get())
                 .setFlags(GridFlags.REQUIRE_CHANNEL)
                 .addService(ICraftingProvider.class, this)
-                .addService(IGridTickable.class, this)
+                .addService(IEnergyOverlayGridConnection.class, this::getSubnetEnergyServices)
                 .setIdlePowerUsage(2.0);
     }
 
@@ -82,8 +82,21 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
     @Override
     public void onMainNodeStateChanged(appeng.api.networking.IGridNodeListener.State state) {
         super.onMainNodeStateChanged(state);
+        invalidateOverlayGrids();
         markForUpdate();
     }
+
+    public void invalidateOverlayGrids() {
+        var mainGrid = getMainNode().getGrid();
+        if (mainGrid != null && mainGrid.getEnergyService() instanceof EnergyService es) {
+            es.invalidateOverlayEnergyGrid();
+        }
+        var subGrid = this.subnetNode.getGrid();
+        if (subGrid != null && subGrid.getEnergyService() instanceof EnergyService es) {
+            es.invalidateOverlayEnergyGrid();
+        }
+    }
+
     public IManagedGridNode getSubnetNode() {
         return this.subnetNode;
     }
@@ -100,6 +113,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         Direction subnetFacing = getSubnetFacing();
         this.subnetNode.setExposedOnSides(EnumSet.of(subnetFacing));
         this.getMainNode().setExposedOnSides(EnumSet.complementOf(EnumSet.of(subnetFacing)));
+        invalidateOverlayGrids();
     }
 
     @Nullable
@@ -117,18 +131,21 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         this.subnetNode.create(getLevel(), getBlockPos());
         this.onFacingChanged();
         this.updatePatterns();
+        invalidateOverlayGrids();
         this.markForUpdate();
     }
 
     @Override
     public void onChunkUnloaded() {
         super.onChunkUnloaded();
+        invalidateOverlayGrids();
         this.subnetNode.destroy();
     }
 
     @Override
     public void setRemoved() {
         super.setRemoved();
+        invalidateOverlayGrids();
         this.subnetNode.destroy();
     }
 
@@ -239,31 +256,20 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         }
     }
 
-    @Override
-    public TickingRequest getTickingRequest(IGridNode node) {
-        return new TickingRequest(1, 20, false);
+    List<EnergyService> getMainEnergyServices() {
+        var grid = getMainNode().getGrid();
+        if (grid != null && grid.getEnergyService() instanceof EnergyService es) {
+            return Collections.singletonList(es);
+        }
+        return Collections.emptyList();
     }
 
-    @Override
-    public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
-        if (getMainNode().isActive() && this.subnetNode.isReady()) {
-            var mainGrid = getMainNode().getGrid();
-            var subnetGrid = this.subnetNode.getGrid();
-            if (mainGrid != null && subnetGrid != null) {
-                var mainEnergy = mainGrid.getEnergyService();
-                var subnetEnergy = subnetGrid.getEnergyService();
-                if (mainEnergy.isNetworkPowered()) {
-                    double demand = subnetEnergy.getEnergyDemand(200.0);
-                    if (demand > 0.1) {
-                        double extracted = mainEnergy.extractAEPower(demand, Actionable.MODULATE, PowerMultiplier.CONFIG);
-                        if (extracted > 0) {
-                            subnetEnergy.injectPower(extracted, Actionable.MODULATE);
-                        }
-                    }
-                }
-            }
+    List<EnergyService> getSubnetEnergyServices() {
+        var grid = this.subnetNode.getGrid();
+        if (grid != null && grid.getEnergyService() instanceof EnergyService es) {
+            return Collections.singletonList(es);
         }
-        return TickRateModulation.SAME;
+        return Collections.emptyList();
     }
 
     @Nullable

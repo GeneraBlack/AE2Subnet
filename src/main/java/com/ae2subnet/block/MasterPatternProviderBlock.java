@@ -20,7 +20,6 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
-import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
@@ -28,7 +27,7 @@ import org.jetbrains.annotations.Nullable;
 
 public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternProviderBlockEntity> {
 
-    public static final DirectionProperty SUBNET_FACING = BlockStateProperties.FACING;
+    public static final DirectionProperty SUBNET_FACING = DirectionProperty.create("facing", Direction.values());
     public static final BooleanProperty ONLINE = BooleanProperty.create("online");
 
     public MasterPatternProviderBlock(Properties props) {
@@ -75,10 +74,15 @@ public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternP
         if (InteractionUtil.canWrenchRotate(heldItem)) {
             Direction current = state.getValue(SUBNET_FACING);
             Direction next = Direction.from3DDataValue((current.get3DDataValue() + 1) % 6);
-            level.setBlockAndUpdate(pos, state.setValue(SUBNET_FACING, next));
             var be = getBlockEntity(level, pos);
+            BlockState newState = state.setValue(SUBNET_FACING, next);
+            if (be != null) {
+                newState = updateBlockStateFromBlockEntity(newState, be);
+            }
+            level.setBlockAndUpdate(pos, newState);
             if (be != null) {
                 be.onFacingChanged();
+                be.markForUpdate();
             }
             return ItemInteractionResult.sidedSuccess(level.isClientSide());
         }
