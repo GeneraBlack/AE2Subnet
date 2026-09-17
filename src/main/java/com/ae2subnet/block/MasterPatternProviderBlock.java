@@ -63,8 +63,17 @@ public class MasterPatternProviderBlock extends AEBaseEntityBlock<MasterPatternP
     @Nullable
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
+        Direction facing;
+        Level level = context.getLevel();
+        BlockPos clickedPos = SubPatternProviderBlock.getClickedTargetPos(context.getClickedPos(), context.getClickedFace(), context.replacingClickedOnBlock());
+        var nodeHost = level.getCapability(appeng.api.AECapabilities.IN_WORLD_GRID_NODE_HOST, clickedPos, null);
+        if (nodeHost != null) {
+            facing = context.getClickedFace().getOpposite();
+        } else {
+            facing = context.getNearestLookingDirection().getOpposite();
+        }
         return defaultBlockState()
-                .setValue(SUBNET_FACING, context.getNearestLookingDirection().getOpposite())
+                .setValue(SUBNET_FACING, facing)
                 .setValue(ONLINE, false);
     }
 

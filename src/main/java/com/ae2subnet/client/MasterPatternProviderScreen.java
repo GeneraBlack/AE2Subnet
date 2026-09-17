@@ -35,12 +35,16 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         // Top Header
         guiGraphics.drawString(this.font, Component.literal("Master Pattern Provider"), 10, 6, 0xE0E0E0, false);
-        guiGraphics.drawString(this.font, Component.literal("● 1 Channel").withColor(0x00E5FF), 140, 6, 0x00E5FF, false);
+        String channelStr = menu.mainActive ? "● 1 Channel" : "○ Offline (No Ch.)";
+        int channelColor = menu.mainActive ? 0x00E5FF : 0xFF5555;
+        guiGraphics.drawString(this.font, Component.literal(channelStr).withColor(channelColor), 110, 6, channelColor, false);
 
         // Telemetry HUD
         String statusStr = menu.totalWorkers > 0 ? "§a● SUBNET ONLINE" : "§c○ NO WORKERS";
         guiGraphics.drawString(this.font, statusStr, 16, 24, 0xFFFFFF, false);
-        guiGraphics.drawString(this.font, "Power: §bBridged", 125, 24, 0xFFFFFF, false);
+
+        String powerStr = menu.subnetPowered ? "Power: §aActive" : (menu.mainActive ? "Power: §eBridged" : "Power: §cUnpowered");
+        guiGraphics.drawString(this.font, powerStr, 120, 24, 0xFFFFFF, false);
 
         String workerCount = "Workers: §f" + menu.totalWorkers;
         guiGraphics.drawString(this.font, workerCount, 16, 38, 0xFFFFFF, false);

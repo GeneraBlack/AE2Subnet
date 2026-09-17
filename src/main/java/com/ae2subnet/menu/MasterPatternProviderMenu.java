@@ -66,6 +66,12 @@ public class MasterPatternProviderMenu extends AEBaseMenu {
     @GuiSync(3)
     public int priority = 0;
 
+    @GuiSync(4)
+    public boolean mainActive = false;
+
+    @GuiSync(5)
+    public boolean subnetPowered = false;
+
     public MasterPatternProviderMenu(int id, Inventory playerInventory, MasterPatternProviderBlockEntity host) {
         super(ModMenuTypes.MASTER_PATTERN_PROVIDER.get(), id, playerInventory, host);
         this.host = host;
@@ -120,6 +126,8 @@ public class MasterPatternProviderMenu extends AEBaseMenu {
                 this.busyWorkers = 0;
             }
             this.priority = host.getPatternPriority();
+            this.mainActive = host.getMainNode().isActive();
+            this.subnetPowered = host.getSubnetNode().isPowered();
         }
 
         super.broadcastChanges();

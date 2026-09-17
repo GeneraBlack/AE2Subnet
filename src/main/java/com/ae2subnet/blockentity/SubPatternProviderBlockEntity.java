@@ -207,19 +207,37 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         return !isRemoved() && hasLevel() && getMainNode().isActive();
     }
 
+    private PatternProviderTarget getTargetForInsert(appeng.api.stacks.AEKey what, long amount, Actionable mode) {
+        if (level == null) return null;
+        var sided = PatternProviderTarget.get(level, getMachinePos(), null, getMachineFacing().getOpposite(), actionSource);
+        if (sided != null && sided.insert(what, amount, Actionable.SIMULATE) > 0) {
+            return sided;
+        }
+        var unsided = PatternProviderTarget.get(level, getMachinePos(), null, null, actionSource);
+        if (unsided != null && unsided.insert(what, amount, Actionable.SIMULATE) > 0) {
+            return unsided;
+        }
+        for (Direction d : Direction.values()) {
+            var dirTarget = PatternProviderTarget.get(level, getMachinePos(), null, d, actionSource);
+            if (dirTarget != null && dirTarget.insert(what, amount, Actionable.SIMULATE) > 0) {
+                return dirTarget;
+            }
+        }
+        return sided != null ? sided : unsided;
+    }
+
     @Override
     public boolean canAcceptInputs(KeyCounter[] inputHolder) {
         if (level == null || state != WorkerState.FREE || !isValidWorker()) {
             return false;
         }
 
-        var target = PatternProviderTarget.get(level, getMachinePos(), null, getMachineFacing().getOpposite(), actionSource);
-        if (target == null) {
-            return false;
-        }
-
         for (var inputList : inputHolder) {
             for (var input : inputList) {
+                var target = getTargetForInsert(input.getKey(), input.getLongValue(), Actionable.SIMULATE);
+                if (target == null) {
+                    return false;
+                }
                 long inserted = target.insert(input.getKey(), input.getLongValue(), Actionable.SIMULATE);
                 if (inserted == 0) {
                     return false;
@@ -235,15 +253,13 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
             return false;
         }
 
-        var target = PatternProviderTarget.get(level, getMachinePos(), null, getMachineFacing().getOpposite(), actionSource);
-        if (target == null) {
-            return false;
-        }
-
         this.activeMaster = new WeakReference<>(master);
 
         patternDetails.pushInputsToExternalInventory(inputHolder, (what, amount) -> {
-            target.insert(what, amount, Actionable.MODULATE);
+            var target = getTargetForInsert(what, amount, Actionable.MODULATE);
+            if (target != null) {
+                target.insert(what, amount, Actionable.MODULATE);
+            }
         });
 
         markOccupied();
