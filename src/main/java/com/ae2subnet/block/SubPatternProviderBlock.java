@@ -3,7 +3,7 @@ package com.ae2subnet.block;
 import appeng.block.AEBaseEntityBlock;
 import appeng.util.InteractionUtil;
 import com.ae2subnet.blockentity.SubPatternProviderBlockEntity;
-import net.minecraft.ChatFormatting;
+import com.ae2subnet.init.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
@@ -15,6 +15,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -28,7 +30,19 @@ public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProvide
 
     public SubPatternProviderBlock(Properties props) {
         super(props);
+        setBlockEntity(SubPatternProviderBlockEntity.class, null, null, null);
         registerDefaultState(defaultBlockState().setValue(MACHINE_FACING, Direction.NORTH));
+    }
+
+    @Override
+    public BlockEntityType<SubPatternProviderBlockEntity> getBlockEntityType() {
+        return ModBlockEntities.SUB_PATTERN_PROVIDER.get();
+    }
+
+    @Nullable
+    @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return new SubPatternProviderBlockEntity(pos, state);
     }
 
     @Override
