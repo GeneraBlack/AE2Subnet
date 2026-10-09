@@ -49,9 +49,13 @@ Encode your processing pattern **once** into the **Master Pattern Provider**. Th
 
 ## ✨ Features
 
-- 🚀 **1-to-Many Pattern Distribution**: 16 processing pattern slots in the Master Provider distribute across infinite connected sub-providers.
+- 🚀 **1-to-Many Pattern Distribution**: 16 processing pattern slots in the Master Provider (expandable to **80** with up to 4 AE2 Capacity Cards, browsable with `<` / `>` page buttons) distribute across infinite connected sub-providers.
 - ⚡ **Zero Main Network Channel Waste**: The Master Provider consumes only **1 channel** on your main network. The entire worker subnet uses **0 main channels**.
 - ⚡ **Zero-Latency Power Bridging**: Automatic energy bridging via AE2's canonical Energy Overlay Grid. No quartz fibers or batteries needed.
+- ⚡ **FE Delivery to Machines**: Sub-Pattern Providers feed Forge Energy (FE) from the ME network straight into the machine they face (active push *and* passive pull). A built-in brownout guard halts delivery once the combined network buffer drops below 20%.
+- 🔋 **Energy Cards**: Up to 4 AE2 Energy Cards in a Sub-Pattern Provider raise the delivery limit (2k / 8k / 32k / 128k / 512k FE/t). The limit is a true per-tick budget.
+- 🔌 **Direct FE Input**: The Master Pattern Provider accepts FE on every face except the subnet port and converts it to AE for the network.
+- 🖥️ **Dedicated GUIs**: Both blocks have an AE2-style GUI with upgrade slots; the Sub-Pattern Provider GUI configures facing, unlock mode and auto-pull and shows live power telemetry.
 - ⏱️ **$O(1)$ Event-Driven Queue**: Zero TPS impact! Workers register themselves into an instant queue without polling loops.
 - 🔄 **Smart Placement & Directional Fallback**:
   - Automatically faces adjacent machines on placement.

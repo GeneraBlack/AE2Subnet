@@ -4,6 +4,8 @@ import appeng.menu.implementations.MenuTypeBuilder;
 import com.ae2subnet.AE2Subnet;
 import com.ae2subnet.blockentity.MasterPatternProviderBlockEntity;
 import com.ae2subnet.menu.MasterPatternProviderMenu;
+import com.ae2subnet.blockentity.SubPatternProviderBlockEntity;
+import com.ae2subnet.menu.SubPatternProviderMenu;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.MenuType;
@@ -19,6 +21,12 @@ public class ModMenuTypes {
             MENU_TYPES.register("master_pattern_provider", () ->
                     MenuTypeBuilder.create(MasterPatternProviderMenu::new, MasterPatternProviderBlockEntity.class)
                             .buildUnregistered(Identifier.fromNamespaceAndPath(AE2Subnet.MOD_ID, "master_pattern_provider"))
+            );
+
+    public static final DeferredHolder<MenuType<?>, MenuType<SubPatternProviderMenu>> SUB_PATTERN_PROVIDER =
+            MENU_TYPES.register("sub_pattern_provider", () ->
+                    MenuTypeBuilder.create(SubPatternProviderMenu::new, SubPatternProviderBlockEntity.class)
+                            .buildUnregistered(Identifier.fromNamespaceAndPath(AE2Subnet.MOD_ID, "sub_pattern_provider"))
             );
 
     public static void register(IEventBus bus) {

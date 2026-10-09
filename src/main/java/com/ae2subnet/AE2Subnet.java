@@ -65,6 +65,18 @@ public class AE2Subnet {
                 ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
                 (be, side) -> be.getFluidHandler(side)
         );
+
+        // Energy capabilities (FE supply & high-power input)
+        event.registerBlockEntity(
+                Capabilities.Energy.BLOCK,
+                ModBlockEntities.MASTER_PATTERN_PROVIDER.get(),
+                (be, side) -> be.getEnergyHandler(side)
+        );
+        event.registerBlockEntity(
+                Capabilities.Energy.BLOCK,
+                ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
+                (be, side) -> be.getEnergyHandler(side)
+        );
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
@@ -77,6 +89,14 @@ public class AE2Subnet {
                     ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
                     ModItems.SUB_PATTERN_PROVIDER.get()
             );
+
+            // Register Capacity Card upgrades for Master Pattern Provider
+            appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.CAPACITY_CARD, ModBlocks.MASTER_PATTERN_PROVIDER.get(), 4);
+            appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.CAPACITY_CARD, ModItems.MASTER_PATTERN_PROVIDER.get(), 4);
+
+            // Register Energy Card upgrades for Sub-Pattern Provider
+            appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.ENERGY_CARD, ModBlocks.SUB_PATTERN_PROVIDER.get(), 4);
+            appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.ENERGY_CARD, ModItems.SUB_PATTERN_PROVIDER.get(), 4);
         });
     }
 }

@@ -4,6 +4,35 @@ All notable changes to the **AE2 Sub-Pattern Provider** mod will be documented i
 
 ---
 
+## [2.1.0] - 2026-10-09
+
+### Major Update: Machine Energy Delivery, Capacity Expansion & GUI Overhaul
+
+* **Sub-Pattern Provider Machine Energy Delivery**:
+  * Delivers Forge Energy (FE) directly to connected machines from the network (both active push on server tick and passive pull via `Capabilities.Energy.BLOCK` on the machine face).
+  * **AE2 Energy Card Support**: Installing up to 4 Energy Cards scales the transfer limit from 2,000 FE/t up to 512,000 FE/t (2k / 8k / 32k / 128k / 512k FE/t).
+  * Enforced as a true per-tick energy budget across both push and pull interactions.
+  * **Brownout Protection Guard**: Automatically pauses machine energy delivery if the combined network buffer (main + subnet energy overlay) drops below 20%.
+* **Master Pattern Provider Multi-Page Capacity Expansion**:
+  * Added 4 upgrade slots for **AE2 Capacity Cards**.
+  * Scales processing pattern storage from 16 up to **80 patterns** across 5 pages (16 patterns per page).
+  * Intuitive `<` and `>` page navigation buttons with dynamic page indicator (`Patterns X/Y`).
+  * All patterns across all unlocked pages are simultaneously registered with the ME autocrafting engine.
+  * Fail-safe drop protection: removing a Capacity Card safely ejects excess patterns on top of the block.
+* **Master Pattern Provider Direct FE Input**:
+  * High-power direct energy input port on all non-subnet faces, accepting FE and converting it into network AE energy.
+  * Real-time HUD indicator reflects active direct FE power input.
+* **Dedicated AE2-Style GUIs & Visual Polish**:
+  * Sub-Pattern Provider now has its own dedicated interactive GUI featuring facing rotation, unlock mode toggling (`On Return` vs. `On Empty`), auto-pull toggle, live telemetry HUD, and 4 Energy Card upgrade slots.
+  * Widened 232px AE2-style GUI panels with dedicated upgrade card columns cleanly isolated from player inventory.
+  * Collision-free telemetry HUD and status indicators with dynamic font-width alignment.
+* **Bug Fixes & Refactoring**:
+  * Brownout protection correctly measures combined energy overlay totals instead of single subnet buffer.
+  * Fixed transaction snapshot accounting and demand over-commit.
+  * Corrected default auto-pull persistence flag on world load.
+
+---
+
 ## [2.0.0] - 2026-09-17
 
 ### Release for Minecraft 26.1.2 (NeoForge 26.1.2.109 / AE2 26.1.11-beta / Java 25)
