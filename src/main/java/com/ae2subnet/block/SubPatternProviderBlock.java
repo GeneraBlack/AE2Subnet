@@ -127,22 +127,66 @@ public class SubPatternProviderBlock extends AEBaseEntityBlock<SubPatternProvide
             }
             return ItemInteractionResult.sidedSuccess(level.isClientSide());
         }
-        return super.useItemOn(heldItem, state, level, pos, player, hand, hit);
+
+        // Energy Card insertion
+        if (heldItem.is(appeng.core.definitions.AEItems.ENERGY_CARD.asItem())) {
+            var be = getBlockEntity(level, pos);
+            if (be != null) {
+                if (be.getEnergyCards() < 4) {
+                    if (!level.isClientSide()) {
+                        be.setEnergyCards(be.getEnergyCards() + 1);
+                        if (!player.isCreative()) {
+                            heldItem.shrink(1);
+                        }
+                        player.sendSystemMessage(Component.literal("§b[Sub-Pattern Provider]§r Energy Cards: §e"
+                                + be.getEnergyCards() + "/4§r (Max Rate: §a"
+                                + String.format("%,d", be.getMaxEnergyTransferRate()) + " FE/t§r)"));
+                    }
+                    level.playSound(null, pos, net.minecraft.sounds.SoundEvents.ITEM_FRAME_ADD_ITEM,
+                            net.minecraft.sounds.SoundSource.BLOCKS, 1.0F, 1.0F);
+                    return ItemInteractionResult.sidedSuccess(level.isClientSide());
+                } else {
+                    if (!level.isClientSide()) {
+                        player.sendSystemMessage(Component.literal("§b[Sub-Pattern Provider]§r Already at maximum Energy Cards (4/4, §a512,000 FE/t§r)!"));
+                    }
+                    return ItemInteractionResult.sidedSuccess(level.isClientSide());
+                }
+            }
+        }
+
+        return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
     }
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hitResult) {
         var be = getBlockEntity(level, pos);
-        if (be != null && !level.isClientSide()) {
-            Direction machineDir = state.getValue(MACHINE_FACING);
-            player.sendSystemMessage(Component.literal("§b[Sub-Pattern Provider]§r Status: " +
-                    (be.getDisplayStatus() == SubnetDisplayStatus.IDLE ? "§aIDLE (Ready)§r" :
-                     be.getDisplayStatus() == SubnetDisplayStatus.BUSY ? "§6BUSY (Crafting)§r" : "§cOFFLINE§r") +
-                    " | Machine Facing: §e" + machineDir.getName().toUpperCase() + "§r" +
-                    " | Unlock Mode: §7" + be.getUnlockMode().name() + "§r"));
+        if (be != null) {
+            if (player.isShiftKeyDown()) {
+                if (!level.isClientSide()) {
+                    if (be.getEnergyCards() > 0) {
+                        be.setEnergyCards(be.getEnergyCards() - 1);
+                        ItemStack cardStack = new ItemStack(appeng.core.definitions.AEItems.ENERGY_CARD.asItem(), 1);
+                        if (!player.addItem(cardStack)) {
+                            player.drop(cardStack, false);
+                        }
+                        level.playSound(null, pos, net.minecraft.sounds.SoundEvents.ITEM_FRAME_REMOVE_ITEM,
+                                net.minecraft.sounds.SoundSource.BLOCKS, 1.0F, 1.0F);
+                        player.sendSystemMessage(Component.literal("§b[Sub-Pattern Provider]§r Removed Energy Card. Remaining: §e"
+                                + be.getEnergyCards() + "/4§r (Max Rate: §a"
+                                + String.format("%,d", be.getMaxEnergyTransferRate()) + " FE/t§r)"));
+                    } else {
+                        player.sendSystemMessage(Component.literal("§b[Sub-Pattern Provider]§r No Energy Cards installed. (Base Rate: §a2,000 FE/t§r)"));
+                    }
+                }
+                return InteractionResult.sidedSuccess(level.isClientSide());
+            }
+
+            if (!level.isClientSide()) {
+                be.openMenu(player, appeng.menu.locator.MenuLocators.forBlockEntity(be));
+            }
             return InteractionResult.sidedSuccess(level.isClientSide());
         }
-        return InteractionResult.sidedSuccess(level.isClientSide());
+        return InteractionResult.PASS;
     }
 }

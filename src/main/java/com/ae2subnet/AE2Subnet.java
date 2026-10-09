@@ -65,6 +65,18 @@ public class AE2Subnet {
                 ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
                 (be, side) -> be.getFluidHandler(side)
         );
+        event.registerBlockEntity(
+                Capabilities.EnergyStorage.BLOCK,
+                ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
+                (be, side) -> be.getEnergyHandler(side)
+        );
+
+        // Master pattern provider direct energy input on non-subnet sides
+        event.registerBlockEntity(
+                Capabilities.EnergyStorage.BLOCK,
+                ModBlockEntities.MASTER_PATTERN_PROVIDER.get(),
+                (be, side) -> be.getEnergyHandler(side)
+        );
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
@@ -77,6 +89,8 @@ public class AE2Subnet {
                     ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
                     ModItems.SUB_PATTERN_PROVIDER.get()
             );
+            appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.CAPACITY_CARD, ModBlocks.MASTER_PATTERN_PROVIDER.get(), 4);
+            appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.ENERGY_CARD, ModBlocks.SUB_PATTERN_PROVIDER.get(), 4);
         });
     }
 }

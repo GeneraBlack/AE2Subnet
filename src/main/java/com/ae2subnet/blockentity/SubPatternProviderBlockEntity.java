@@ -1,6 +1,8 @@
 package com.ae2subnet.blockentity;
 
 import appeng.api.config.Actionable;
+import appeng.api.config.PowerMultiplier;
+import appeng.api.config.PowerUnit;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IManagedGridNode;
@@ -12,9 +14,16 @@ import appeng.api.networking.ticking.TickingRequest;
 import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
 import appeng.api.stacks.KeyCounter;
+import appeng.api.upgrades.IUpgradeInventory;
+import appeng.api.upgrades.IUpgradeableObject;
+import appeng.api.upgrades.UpgradeInventories;
+import appeng.blockentity.ServerTickingBlockEntity;
 import appeng.blockentity.grid.AENetworkedBlockEntity;
+import appeng.core.definitions.AEItems;
 import appeng.helpers.patternprovider.PatternProviderTarget;
 import appeng.me.helpers.MachineSource;
+import appeng.menu.MenuOpener;
+import appeng.menu.locator.MenuHostLocator;
 import com.ae2subnet.api.IMasterPatternProvider;
 import com.ae2subnet.api.ISubnetWorker;
 import com.ae2subnet.api.ISubnetWorkerService;
@@ -23,33 +32,43 @@ import com.ae2subnet.api.WorkerState;
 import com.ae2subnet.block.SubPatternProviderBlock;
 import com.ae2subnet.init.ModBlockEntities;
 import com.ae2subnet.init.ModItems;
+import com.ae2subnet.init.ModMenuTypes;
+import com.ae2subnet.util.EnergyGrids;
+import com.ae2subnet.util.EnergyLogic;
+import com.ae2subnet.util.PatternPaging;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 import net.neoforged.neoforge.items.IItemHandler;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import appeng.blockentity.ServerTickingBlockEntity;
-
 import java.lang.ref.WeakReference;
 import java.util.EnumSet;
+import java.util.List;
 
 public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
-        implements ISubnetWorker, IActionHost, IGridTickable, ServerTickingBlockEntity {
+        implements ISubnetWorker, IActionHost, IGridTickable, ServerTickingBlockEntity, IUpgradeableObject {
 
     private WorkerState state = WorkerState.FREE;
     private UnlockMode unlockMode = UnlockMode.ON_OUTPUT_RETURN;
     private boolean autoPull = true;
     private int busyHoldTicks = 0;
 
+    private long energyBudgetTick = -1;
+    private int energyBudgetUsed = 0;
+
+    private final IUpgradeInventory upgrades = UpgradeInventories.forMachine(ModItems.SUB_PATTERN_PROVIDER.get(), 4, this::onUpgradesChanged);
     private WeakReference<IMasterPatternProvider> activeMaster = null;
     private final IActionSource actionSource = new MachineSource(this::getActionableNode);
 
@@ -65,6 +84,11 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
                 .setIdlePowerUsage(0.5);
     }
 
+    @Override
+    public java.util.Set<Direction> getGridConnectableSides(appeng.api.orientation.BlockOrientation orientation) {
+        return EnumSet.complementOf(EnumSet.of(getMachineFacing()));
+    }
+
     public Direction getMachineFacing() {
         BlockState state = getBlockState();
         if (state.hasProperty(SubPatternProviderBlock.MACHINE_FACING)) {
@@ -78,8 +102,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     public void onFacingChanged() {
-        Direction machineFacing = getMachineFacing();
-        getMainNode().setExposedOnSides(EnumSet.complementOf(EnumSet.of(machineFacing)));
+        onGridConnectableSidesChanged();
     }
 
     @Nullable
@@ -93,8 +116,8 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
 
     @Override
     public void onReady() {
+        onGridConnectableSidesChanged();
         super.onReady();
-        onFacingChanged();
         markFree();
         markForUpdate();
     }
@@ -122,12 +145,39 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     @Override
+    public void addAdditionalDrops(Level level, BlockPos pos, List<ItemStack> drops) {
+        super.addAdditionalDrops(level, pos, drops);
+        for (var stack : this.upgrades) {
+            if (!stack.isEmpty()) {
+                drops.add(stack);
+            }
+        }
+    }
+
+    @Override
+    public void clearContent() {
+        super.clearContent();
+        this.upgrades.clear();
+    }
+
+    @Override
+    public IUpgradeInventory getUpgrades() {
+        return upgrades;
+    }
+
+    public void onUpgradesChanged() {
+        saveChanges();
+        markForUpdate();
+    }
+
+    @Override
     public void saveAdditional(CompoundTag data, HolderLookup.Provider registries) {
         super.saveAdditional(data, registries);
         data.putString("workerState", state.name());
         data.putString("unlockMode", unlockMode.name());
         data.putBoolean("autoPull", autoPull);
         data.putInt("busyHoldTicks", busyHoldTicks);
+        this.upgrades.writeToNBT(data, "upgrades", registries);
     }
 
     @Override
@@ -147,11 +197,16 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
                 this.unlockMode = UnlockMode.ON_OUTPUT_RETURN;
             }
         }
-        if (data.contains("autoPull")) {
-            this.autoPull = data.getBoolean("autoPull");
-        }
+        this.autoPull = !data.contains("autoPull") || data.getBoolean("autoPull");
         if (data.contains("busyHoldTicks")) {
             this.busyHoldTicks = data.getInt("busyHoldTicks");
+        }
+        this.upgrades.readFromNBT(data, "upgrades", registries);
+        int legacyCards = data.getInt("energyCards");
+        if (legacyCards > 0 && upgrades.getInstalledUpgrades(AEItems.ENERGY_CARD) == 0) {
+            for (int i = 0; i < Math.min(4, legacyCards); i++) {
+                upgrades.setItemDirect(i, new ItemStack(AEItems.ENERGY_CARD.asItem(), 1));
+            }
         }
     }
 
@@ -175,6 +230,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         super.onMainNodeStateChanged(state);
         markForUpdate();
     }
+
     public WorkerState getWorkerState() {
         return state;
     }
@@ -195,6 +251,61 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     public void setAutoPull(boolean autoPull) {
         this.autoPull = autoPull;
         saveChanges();
+    }
+
+    public int getEnergyCards() {
+        return upgrades.getInstalledUpgrades(AEItems.ENERGY_CARD);
+    }
+
+    public void setEnergyCards(int count) {
+        int clamped = Math.max(0, Math.min(4, count));
+        for (int i = 0; i < upgrades.size(); i++) {
+            upgrades.setItemDirect(i, ItemStack.EMPTY);
+        }
+        for (int i = 0; i < clamped; i++) {
+            upgrades.setItemDirect(i, new ItemStack(AEItems.ENERGY_CARD.asItem(), 1));
+        }
+        onUpgradesChanged();
+    }
+
+    public void cycleFacing() {
+        Direction next = PatternPaging.nextFacing(getMachineFacing());
+        if (level != null && getBlockState().hasProperty(SubPatternProviderBlock.MACHINE_FACING)) {
+            BlockState newState = getBlockState().setValue(SubPatternProviderBlock.MACHINE_FACING, next);
+            newState = newState.setValue(SubPatternProviderBlock.STATUS, getDisplayStatus());
+            level.setBlockAndUpdate(getBlockPos(), newState);
+            onFacingChanged();
+            markForUpdate();
+        }
+    }
+
+    public void cycleUnlockMode() {
+        this.unlockMode = PatternPaging.nextUnlockMode(this.unlockMode);
+        saveChanges();
+        markForUpdate();
+    }
+
+    public void toggleAutoPull() {
+        this.autoPull = !this.autoPull;
+        saveChanges();
+        markForUpdate();
+    }
+
+    public void openMenu(Player player, MenuHostLocator locator) {
+        MenuOpener.open(ModMenuTypes.SUB_PATTERN_PROVIDER.get(), player, locator);
+    }
+
+    public int getMaxEnergyTransferRate() {
+        return EnergyLogic.maxTransferRate(getEnergyCards());
+    }
+
+    public boolean isBrownoutHalted() {
+        var grid = getMainNode().getGrid();
+        if (grid == null) return false;
+        var es = grid.getEnergyService();
+        if (es == null) return false;
+        var totals = EnergyGrids.overlayTotals(es);
+        return EnergyLogic.isBrownout(totals.stored(), totals.max());
     }
 
     @Override
@@ -304,6 +415,66 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
             if (this.busyHoldTicks == 0 && this.state == WorkerState.FREE) {
                 markForUpdate();
             }
+        }
+        pushEnergyToMachine();
+    }
+
+    private int remainingEnergyBudget() {
+        if (level == null) return 0;
+        long now = level.getGameTime();
+        if (now != energyBudgetTick) {
+            energyBudgetTick = now;
+            energyBudgetUsed = 0;
+        }
+        return Math.max(0, getMaxEnergyTransferRate() - energyBudgetUsed);
+    }
+
+    private void consumeEnergyBudget(int fe) {
+        if (remainingEnergyBudget() >= 0) {
+            energyBudgetUsed += Math.max(0, fe);
+        }
+    }
+
+    private void pushEnergyToMachine() {
+        if (level == null || level.isClientSide() || !getMainNode().isActive()) {
+            return;
+        }
+
+        var grid = getMainNode().getGrid();
+        if (grid == null) return;
+        var es = grid.getEnergyService();
+        if (es == null) return;
+
+        var totals = EnergyGrids.overlayTotals(es);
+        int availableFE = EnergyLogic.deliverableFE(remainingEnergyBudget(), totals.stored(), totals.max());
+        if (availableFE <= 0) {
+            return;
+        }
+
+        Direction machineFacing = getMachineFacing();
+        BlockPos machinePos = getMachinePos();
+        var target = level.getCapability(Capabilities.EnergyStorage.BLOCK, machinePos, machineFacing.getOpposite());
+        if (target == null) {
+            target = level.getCapability(Capabilities.EnergyStorage.BLOCK, machinePos, null);
+        }
+        if (target == null || !target.canReceive()) {
+            return;
+        }
+
+        double simulatedAE = es.extractAEPower(PowerUnit.FE.convertTo(PowerUnit.AE, availableFE), Actionable.SIMULATE, PowerMultiplier.ONE);
+        int canExtractFE = (int) Math.floor(PowerUnit.AE.convertTo(PowerUnit.FE, simulatedAE));
+        int toPush = Math.min(availableFE, canExtractFE);
+        if (toPush <= 0) {
+            return;
+        }
+
+        int accepted = target.receiveEnergy(toPush, true);
+        if (accepted > 0) {
+            double neededAE = PowerUnit.FE.convertTo(PowerUnit.AE, accepted);
+            double extractedAE = es.extractAEPower(neededAE, Actionable.MODULATE, PowerMultiplier.ONE);
+            int actualFE = (int) Math.floor(PowerUnit.AE.convertTo(PowerUnit.FE, extractedAE));
+            int inserted = target.receiveEnergy(actualFE, false);
+            consumeEnergyBudget(inserted);
         }
     }
 
@@ -415,6 +586,74 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     public IFluidHandler getFluidHandler(@Nullable Direction side) {
         if (side == getMachineFacing()) {
             return returnFluidHandler;
+        }
+        return null;
+    }
+
+    private final IEnergyStorage energyHandler = new IEnergyStorage() {
+        @Override
+        public int receiveEnergy(int maxReceive, boolean simulate) {
+            return 0; // Sub-Pattern Provider delivers power to machines, does not accept input
+        }
+
+        @Override
+        public int extractEnergy(int maxExtract, boolean simulate) {
+            if (maxExtract <= 0) return 0;
+            var grid = getMainNode().getGrid();
+            if (grid == null) return 0;
+            var es = grid.getEnergyService();
+            if (es == null) return 0;
+
+            var totals = EnergyGrids.overlayTotals(es);
+            int budget = remainingEnergyBudget();
+            int maxSafeFE = EnergyLogic.deliverableFE(budget, totals.stored(), totals.max());
+            int toExtractFE = Math.min(maxExtract, maxSafeFE);
+            if (toExtractFE <= 0) return 0;
+
+            double wantedAE = PowerUnit.FE.convertTo(PowerUnit.AE, toExtractFE);
+            double extractedAE = es.extractAEPower(wantedAE, simulate ? Actionable.SIMULATE : Actionable.MODULATE, PowerMultiplier.ONE);
+            int actualFE = (int) Math.floor(PowerUnit.AE.convertTo(PowerUnit.FE, extractedAE));
+            if (!simulate && actualFE > 0) {
+                consumeEnergyBudget(actualFE);
+            }
+            return actualFE;
+        }
+
+        @Override
+        public int getEnergyStored() {
+            var grid = getMainNode().getGrid();
+            if (grid != null && grid.getEnergyService() != null) {
+                var totals = EnergyGrids.overlayTotals(grid.getEnergyService());
+                return (int) Math.min(Integer.MAX_VALUE, Math.floor(PowerUnit.AE.convertTo(PowerUnit.FE, EnergyLogic.safeAE(totals.stored(), totals.max()))));
+            }
+            return 0;
+        }
+
+        @Override
+        public int getMaxEnergyStored() {
+            var grid = getMainNode().getGrid();
+            if (grid != null && grid.getEnergyService() != null) {
+                var totals = EnergyGrids.overlayTotals(grid.getEnergyService());
+                return (int) Math.min(Integer.MAX_VALUE, Math.floor(PowerUnit.AE.convertTo(PowerUnit.FE, totals.max())));
+            }
+            return 0;
+        }
+
+        @Override
+        public boolean canExtract() {
+            return true;
+        }
+
+        @Override
+        public boolean canReceive() {
+            return false;
+        }
+    };
+
+    @Nullable
+    public IEnergyStorage getEnergyHandler(@Nullable Direction side) {
+        if (side == getMachineFacing()) {
+            return energyHandler;
         }
         return null;
     }

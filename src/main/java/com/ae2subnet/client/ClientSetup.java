@@ -12,5 +12,6 @@ public class ClientSetup {
     @SubscribeEvent
     public static void registerScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenuTypes.MASTER_PATTERN_PROVIDER.get(), MasterPatternProviderScreen::new);
+        event.register(ModMenuTypes.SUB_PATTERN_PROVIDER.get(), SubPatternProviderScreen::new);
     }
 }

@@ -1,6 +1,7 @@
 package com.ae2subnet.blockentity;
 
 import appeng.api.config.Actionable;
+import appeng.api.config.PowerUnit;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.crafting.PatternDetailsHelper;
 import appeng.api.networking.GridFlags;
@@ -12,7 +13,11 @@ import appeng.api.networking.security.IActionHost;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
+import appeng.api.upgrades.IUpgradeInventory;
+import appeng.api.upgrades.IUpgradeableObject;
+import appeng.api.upgrades.UpgradeInventories;
 import appeng.blockentity.grid.AENetworkedBlockEntity;
+import appeng.core.definitions.AEItems;
 import appeng.me.energy.IEnergyOverlayGridConnection;
 import appeng.me.helpers.BlockEntityNodeListener;
 import appeng.me.helpers.MachineSource;
@@ -27,13 +32,19 @@ import com.ae2subnet.block.MasterPatternProviderBlock;
 import com.ae2subnet.init.ModBlockEntities;
 import com.ae2subnet.init.ModItems;
 import com.ae2subnet.init.ModMenuTypes;
+import com.ae2subnet.util.EnergyGrids;
+import com.ae2subnet.util.PatternPaging;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.Containers;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
@@ -42,7 +53,7 @@ import java.util.EnumSet;
 import java.util.List;
 
 public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
-        implements ICraftingProvider, IMasterPatternProvider, InternalInventoryHost, IActionHost {
+        implements ICraftingProvider, IMasterPatternProvider, InternalInventoryHost, IActionHost, IUpgradeableObject {
 
     private final IManagedGridNode subnetNode = GridHelper.createManagedNode(this, BlockEntityNodeListener.INSTANCE)
             .setVisualRepresentation(ModItems.MASTER_PATTERN_PROVIDER.get())
@@ -50,11 +61,13 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
             .setTagName("subnet_node")
             .addService(IEnergyOverlayGridConnection.class, this::getMainEnergyServices);
 
-    private final AppEngInternalInventory patternInventory = new AppEngInternalInventory(this, 16);
+    private final AppEngInternalInventory patternInventory = new AppEngInternalInventory(this, 80);
+    private final IUpgradeInventory upgrades = UpgradeInventories.forMachine(ModItems.MASTER_PATTERN_PROVIDER.get(), 4, this::onUpgradesChanged);
     private final List<IPatternDetails> patterns = new ArrayList<>();
     private final IActionSource actionSource = new MachineSource(this::getActionableNode);
 
     private int priority = 0;
+    private long lastFeInsertTime = Long.MIN_VALUE / 2;
 
     public MasterPatternProviderBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.MASTER_PATTERN_PROVIDER.get(), pos, blockState);
@@ -150,10 +163,58 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
     @Override
+    public void addAdditionalDrops(Level level, BlockPos pos, List<ItemStack> drops) {
+        super.addAdditionalDrops(level, pos, drops);
+        for (var stack : this.patternInventory) {
+            if (!stack.isEmpty()) {
+                drops.add(stack);
+            }
+        }
+        for (var stack : this.upgrades) {
+            if (!stack.isEmpty()) {
+                drops.add(stack);
+            }
+        }
+    }
+
+    @Override
+    public void clearContent() {
+        super.clearContent();
+        this.patternInventory.clear();
+        this.upgrades.clear();
+    }
+
+    @Override
+    public IUpgradeInventory getUpgrades() {
+        return upgrades;
+    }
+
+    public int getMaxPages() {
+        return PatternPaging.maxPages(upgrades.getInstalledUpgrades(AEItems.CAPACITY_CARD));
+    }
+
+    public void onUpgradesChanged() {
+        int maxAllowedSlots = getMaxPages() * PatternPaging.PAGE_SIZE;
+        if (level != null && !level.isClientSide()) {
+            for (int i = maxAllowedSlots; i < patternInventory.size(); i++) {
+                ItemStack stack = patternInventory.getStackInSlot(i);
+                if (!stack.isEmpty()) {
+                    Containers.dropItemStack(level, getBlockPos().getX() + 0.5, getBlockPos().getY() + 1.0, getBlockPos().getZ() + 0.5, stack);
+                    patternInventory.setItemDirect(i, ItemStack.EMPTY);
+                }
+            }
+        }
+        updatePatterns();
+        saveChanges();
+        markForUpdate();
+    }
+
+    @Override
     public void saveAdditional(CompoundTag data, HolderLookup.Provider registries) {
         super.saveAdditional(data, registries);
         this.subnetNode.saveToNBT(data);
         this.patternInventory.writeToNBT(data, "patterns", registries);
+        this.upgrades.writeToNBT(data, "upgrades", registries);
         data.putInt("priority", this.priority);
     }
 
@@ -162,6 +223,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         super.loadTag(data, registries);
         this.subnetNode.loadFromNBT(data);
         this.patternInventory.readFromNBT(data, "patterns", registries);
+        this.upgrades.readFromNBT(data, "upgrades", registries);
         this.priority = data.getInt("priority");
         if (hasLevel()) {
             this.updatePatterns();
@@ -171,7 +233,9 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
     public void updatePatterns() {
         patterns.clear();
         if (level != null && !level.isClientSide()) {
-            for (var stack : this.patternInventory) {
+            int maxSlots = getMaxPages() * PatternPaging.PAGE_SIZE;
+            for (int i = 0; i < maxSlots; i++) {
+                ItemStack stack = this.patternInventory.getStackInSlot(i);
                 if (!stack.isEmpty()) {
                     var details = PatternDetailsHelper.decodePattern(stack, level);
                     if (details != null) {
@@ -285,6 +349,80 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
     @Override
     protected Item getItemFromBlockEntity() {
         return ModItems.MASTER_PATTERN_PROVIDER.get();
+    }
+
+    public boolean isExternalEnergyConnected() {
+        if (level == null) return false;
+        return (level.getGameTime() - lastFeInsertTime) < 40;
+    }
+
+    private final IEnergyStorage energyHandler = new IEnergyStorage() {
+        @Override
+        public int receiveEnergy(int maxReceive, boolean simulate) {
+            if (maxReceive <= 0) return 0;
+            var targetGrid = subnetNode.getGrid() != null ? subnetNode.getGrid() : getMainNode().getGrid();
+            if (targetGrid == null) return 0;
+            var es = targetGrid.getEnergyService();
+            if (es == null) return 0;
+
+            double demandAE = es.getEnergyDemand(PowerUnit.FE.convertTo(PowerUnit.AE, (double) maxReceive));
+            int canAccept = (int) Math.floor(PowerUnit.AE.convertTo(PowerUnit.FE, demandAE));
+            int toInsert = Math.min(maxReceive, canAccept);
+            if (toInsert > 0) {
+                if (!simulate) {
+                    double aeAmount = PowerUnit.FE.convertTo(PowerUnit.AE, toInsert);
+                    es.injectPower(aeAmount, Actionable.MODULATE);
+                    if (level != null) {
+                        lastFeInsertTime = level.getGameTime();
+                    }
+                }
+                return toInsert;
+            }
+            return 0;
+        }
+
+        @Override
+        public int extractEnergy(int maxExtract, boolean simulate) {
+            return 0;
+        }
+
+        @Override
+        public int getEnergyStored() {
+            var targetGrid = subnetNode.getGrid() != null ? subnetNode.getGrid() : getMainNode().getGrid();
+            if (targetGrid != null && targetGrid.getEnergyService() != null) {
+                var totals = EnergyGrids.overlayTotals(targetGrid.getEnergyService());
+                return (int) Math.min(Integer.MAX_VALUE, Math.floor(PowerUnit.AE.convertTo(PowerUnit.FE, totals.stored())));
+            }
+            return 0;
+        }
+
+        @Override
+        public int getMaxEnergyStored() {
+            var targetGrid = subnetNode.getGrid() != null ? subnetNode.getGrid() : getMainNode().getGrid();
+            if (targetGrid != null && targetGrid.getEnergyService() != null) {
+                var totals = EnergyGrids.overlayTotals(targetGrid.getEnergyService());
+                return (int) Math.min(Integer.MAX_VALUE, Math.floor(PowerUnit.AE.convertTo(PowerUnit.FE, totals.max())));
+            }
+            return 0;
+        }
+
+        @Override
+        public boolean canExtract() {
+            return false;
+        }
+
+        @Override
+        public boolean canReceive() {
+            return true;
+        }
+    };
+
+    @Nullable
+    public IEnergyStorage getEnergyHandler(@Nullable Direction side) {
+        if (side == getSubnetFacing()) {
+            return null;
+        }
+        return energyHandler;
     }
 
     public void openMenu(Player player, MenuHostLocator locator) {
