@@ -4,6 +4,12 @@ All notable changes to the **AE2 Sub-Pattern Provider** mod will be documented i
 
 ---
 
+## [1.2.1] - 2026-10-10
+
+* **Fix**: Loadbalancer and Collector recipes were not loaded on 1.21.1 (ingredients now use the 1.21.1 format).
+
+---
+
 ## [1.2.0] - 2026-10-10
 
 ### Feature Backport: Batch Mode, Loadbalancer & Collector (Minecraft 1.21.1)

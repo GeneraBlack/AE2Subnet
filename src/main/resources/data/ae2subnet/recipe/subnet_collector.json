@@ -6,10 +6,10 @@
     "IHI"
   ],
   "key": {
-    "S": "ae2subnet:sub_pattern_provider",
-    "P": "ae2:logic_processor",
-    "H": "minecraft:hopper",
-    "I": "minecraft:iron_ingot"
+    "S": { "item": "ae2subnet:sub_pattern_provider" },
+    "P": { "item": "ae2:logic_processor" },
+    "H": { "item": "minecraft:hopper" },
+    "I": { "item": "minecraft:iron_ingot" }
   },
   "result": {
     "count": 1,

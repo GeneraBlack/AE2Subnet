@@ -6,9 +6,9 @@
     "ISI"
   ],
   "key": {
-    "S": "ae2subnet:sub_pattern_provider",
-    "P": "ae2:logic_processor",
-    "I": "minecraft:iron_ingot"
+    "S": { "item": "ae2subnet:sub_pattern_provider" },
+    "P": { "item": "ae2:logic_processor" },
+    "I": { "item": "minecraft:iron_ingot" }
   },
   "result": {
     "count": 1,
