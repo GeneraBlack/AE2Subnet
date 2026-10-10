@@ -1,4 +1,8 @@
 {
+  "tooltip.ae2subnet.card.capacity": "Master Pattern Provider: +1 pattern page (16 slots) per card, up to 5 pages.",
+  "tooltip.ae2subnet.card.energy": "Sub-Pattern Provider: raises the FE/t delivered to the machine (2k / 8k / 32k / 128k / 512k with 0-4 cards).",
+  "tooltip.ae2subnet.master.cards": "Upgrades: Capacity Card (up to 4) - more pattern pages.",
+  "tooltip.ae2subnet.sub.cards": "Upgrades: Energy Card (up to 4) - higher FE/t to the machine.",
   "block.ae2subnet.master_pattern_provider": "Master Pattern Provider",
   "block.ae2subnet.sub_pattern_provider": "Sub-Pattern Provider",
   "block.ae2subnet.subnet_loadbalancer": "Subnet Loadbalancer",
