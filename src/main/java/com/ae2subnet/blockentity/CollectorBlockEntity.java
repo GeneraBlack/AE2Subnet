@@ -90,6 +90,7 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
             }
             // Only the face that touches the collector is used: the machine decides there what may leave (output
             // slots only). Unsided or other faces could expose input and fuel slots as well.
+            pulled |= pullFluids(service, pos, face);
             var touching = level.getCapability(Capabilities.Item.BLOCK, pos, face);
             var tried = new java.util.ArrayList<ResourceHandler<ItemResource>>(1);
             addHandler(tried, touching);
@@ -118,6 +119,32 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
         return pulled;
     }
 
+    /** Fluid outputs of the machine on the touching face (awaited outputs and byproducts, same rules as items). */
+    private boolean pullFluids(ISubnetWorkerService service, BlockPos pos, Direction face) {
+        var handler = level.getCapability(Capabilities.Fluid.BLOCK, pos, face);
+        if (handler == null) {
+            return false;
+        }
+        boolean pulled = false;
+        for (int i = 0; i < handler.size(); i++) {
+            var resource = handler.getResource(i);
+            if (resource.isEmpty()) {
+                continue;
+            }
+            var key = AEFluidKey.of(resource);
+            if (!awaited(service, key) && !isByproduct(key)) {
+                continue;
+            }
+            try (var tx = Transaction.openRoot()) {
+                int extracted = handler.extract(i, resource, Integer.MAX_VALUE, tx);
+                if (extracted > 0 && deliver(key, extracted)) {
+                    tx.commit();
+                    pulled = true;
+                }
+            }
+        }
+        return pulled;
+    }
     private static void addHandler(java.util.List<ResourceHandler<ItemResource>> list, @Nullable ResourceHandler<ItemResource> handler) {
         if (handler != null && !list.contains(handler)) {
             list.add(handler);

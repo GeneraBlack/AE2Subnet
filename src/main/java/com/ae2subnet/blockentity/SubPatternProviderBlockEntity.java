@@ -749,9 +749,13 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
 
         // Strategy 2: Active output pull fallback (never pulls back items that were just pushed in as inputs)
         if (autoPull) {
+            boolean fluidPulled = pullFluids();
             var itemHandler = level.getCapability(Capabilities.Item.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
+            if (itemHandler == null && fluidPulled) {
+                return TickRateModulation.URGENT;
+            }
             if (itemHandler != null) {
-                boolean pulled = false;
+                boolean pulled = fluidPulled;
                 for (int i = 0; i < itemHandler.size() && !inFlight.isEmpty(); i++) {
                     var resource = itemHandler.getResource(i);
                     if (resource.isEmpty()) {
@@ -780,6 +784,36 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
 
+    /** Pulls fluid outputs out of the machine (same rules as for items: never what was just pushed in as input). */
+    private boolean pullFluids() {
+        var fluidHandler = level.getCapability(Capabilities.Fluid.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
+        if (fluidHandler == null) {
+            fluidHandler = level.getCapability(Capabilities.Fluid.BLOCK, getMachinePos(), null);
+        }
+        if (fluidHandler == null) {
+            return false;
+        }
+        boolean pulled = false;
+        for (int i = 0; i < fluidHandler.size() && !inFlight.isEmpty(); i++) {
+            var resource = fluidHandler.getResource(i);
+            if (resource.isEmpty()) {
+                continue;
+            }
+            var key = AEFluidKey.of(resource);
+            if (pendingInputKeys.contains(key) && !inFlight.expects(key)) {
+                continue;
+            }
+            try (var tx = Transaction.openRoot()) {
+                int extracted = fluidHandler.extract(i, resource, Integer.MAX_VALUE, tx);
+                if (extracted > 0) {
+                    tx.commit();
+                    handleOutputReturned(key, extracted);
+                    pulled = true;
+                }
+            }
+        }
+        return pulled;
+    }
     @Nullable
     @Override
     public IGridNode getActionableNode() {
