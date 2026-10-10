@@ -87,15 +87,11 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
             if (GridHelper.getExposedNode(level, pos, face) != null) {
                 continue; // AE blocks are not machines
             }
-            // Machines with side configuration only let items out on their output side: try the touching face first,
-            // then the unsided view and every other face
-            var tried = new java.util.ArrayList<ResourceHandler<ItemResource>>(7);
+            // Only the face that touches the collector is used: the machine decides there what may leave (output
+            // slots only). Unsided or other faces could expose input and fuel slots as well.
             var touching = level.getCapability(Capabilities.Item.BLOCK, pos, face);
+            var tried = new java.util.ArrayList<ResourceHandler<ItemResource>>(1);
             addHandler(tried, touching);
-            addHandler(tried, level.getCapability(Capabilities.Item.BLOCK, pos, null));
-            for (Direction other : Direction.values()) {
-                addHandler(tried, level.getCapability(Capabilities.Item.BLOCK, pos, other));
-            }
             for (var handler : tried) {
                 for (int i = 0; i < handler.size(); i++) {
                     var resource = handler.getResource(i);
@@ -103,7 +99,7 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
                         continue;
                     }
                     var key = AEItemKey.of(resource);
-                    // Awaited outputs come out of any face. Byproducts (anything that is not a pattern input) only out of
+                    // Awaited outputs and byproducts (anything that is not a pattern input) come out of
                     // the touching face, so inputs and fuel a player put in by hand are left alone
                     if (!awaited(service, key) && !(handler == touching && isByproduct(key))) {
                         continue;
