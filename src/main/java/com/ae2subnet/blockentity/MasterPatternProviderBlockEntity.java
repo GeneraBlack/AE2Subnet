@@ -310,6 +310,20 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         return false;
     }
 
+    @Override
+    public boolean isPatternInput(appeng.api.stacks.AEKey key) {
+        for (var base : basePatterns) {
+            for (var in : base.getInputs()) {
+                for (var possible : in.getPossibleInputs()) {
+                    if (possible.what().equals(key)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     private boolean isKnownPattern(IPatternDetails details) {
         return patterns.contains(details) || basePatterns.contains(ScaledPattern.unwrap(details));
     }

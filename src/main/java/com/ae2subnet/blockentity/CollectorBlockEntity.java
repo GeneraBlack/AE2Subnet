@@ -90,7 +90,8 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
             // Machines with side configuration only let items out on their output side: try the touching face first,
             // then the unsided view and every other face
             var tried = new java.util.ArrayList<ResourceHandler<ItemResource>>(7);
-            addHandler(tried, level.getCapability(Capabilities.Item.BLOCK, pos, face));
+            var touching = level.getCapability(Capabilities.Item.BLOCK, pos, face);
+            addHandler(tried, touching);
             addHandler(tried, level.getCapability(Capabilities.Item.BLOCK, pos, null));
             for (Direction other : Direction.values()) {
                 addHandler(tried, level.getCapability(Capabilities.Item.BLOCK, pos, other));
@@ -102,7 +103,9 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
                         continue;
                     }
                     var key = AEItemKey.of(resource);
-                    if (!awaited(service, key)) {
+                    // Awaited outputs come out of any face. Byproducts (anything that is not a pattern input) only out of
+                    // the touching face, so inputs and fuel a player put in by hand are left alone
+                    if (!awaited(service, key) && !(handler == touching && isByproduct(key))) {
                         continue;
                     }
                     try (var tx = Transaction.openRoot()) {
@@ -122,6 +125,12 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
         if (handler != null && !list.contains(handler)) {
             list.add(handler);
         }
+    }
+
+    /** An item that no pattern of the master feeds into machines, so it can only be something a machine produced. */
+    private boolean isByproduct(AEKey key) {
+        var master = SubnetMasters.find(getMainNode().getGrid());
+        return master != null && master.isMassMode() && !master.isPatternInput(key);
     }
 
     /**

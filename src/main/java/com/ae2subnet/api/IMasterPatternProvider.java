@@ -27,4 +27,9 @@ public interface IMasterPatternProvider {
     default boolean isPatternOutput(AEKey key) {
         return false;
     }
+
+    /** Whether {@code key} is an input of one of this provider's patterns (machines are filled with it). */
+    default boolean isPatternInput(AEKey key) {
+        return false;
+    }
 }
