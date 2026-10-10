@@ -87,6 +87,7 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
             }
             // Only the face that touches the collector is used: the machine decides there what may leave (output
             // slots only). Unsided or other faces could expose input and fuel slots as well.
+            pulled |= pullFluids(service, pos, face);
             var touching = level.getCapability(Capabilities.ItemHandler.BLOCK, pos, face);
             if (touching == null) {
                 continue;
@@ -110,6 +111,38 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
                     deliver(AEItemKey.of(extracted), extracted.getCount());
                     pulled = true;
                 }
+            }
+        }
+        return pulled;
+    }
+
+    /** Fluid outputs of the machine on the touching face (awaited outputs and byproducts, same rules as items). */
+    private boolean pullFluids(ISubnetWorkerService service, BlockPos pos, Direction face) {
+        var handler = level.getCapability(Capabilities.FluidHandler.BLOCK, pos, face);
+        if (handler == null) {
+            return false;
+        }
+        boolean pulled = false;
+        for (int i = 0; i < handler.getTanks(); i++) {
+            var inTank = handler.getFluidInTank(i);
+            if (inTank.isEmpty()) {
+                continue;
+            }
+            var key = AEFluidKey.of(inTank);
+            if (!awaited(service, key) && !isByproduct(key)) {
+                continue;
+            }
+            if (!canDeliver()) {
+                return pulled;
+            }
+            var sim = handler.drain(inTank.copy(), IFluidHandler.FluidAction.SIMULATE);
+            if (sim.isEmpty()) {
+                continue;
+            }
+            var drained = handler.drain(sim, IFluidHandler.FluidAction.EXECUTE);
+            if (!drained.isEmpty()) {
+                deliver(AEFluidKey.of(drained), drained.getAmount());
+                pulled = true;
             }
         }
         return pulled;

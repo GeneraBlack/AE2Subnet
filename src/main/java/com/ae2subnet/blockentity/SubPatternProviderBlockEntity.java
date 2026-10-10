@@ -759,9 +759,13 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
 
         // Strategy 2: Active output pull fallback (never pulls back items that were just pushed in as inputs)
         if (autoPull) {
+            boolean fluidPulled = pullFluids();
             var itemHandler = level.getCapability(Capabilities.ItemHandler.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
+            if (itemHandler == null && fluidPulled) {
+                return TickRateModulation.URGENT;
+            }
             if (itemHandler != null) {
-                boolean pulled = false;
+                boolean pulled = fluidPulled;
                 for (int i = 0; i < itemHandler.getSlots() && !inFlight.isEmpty(); i++) {
                     var sim = itemHandler.extractItem(i, 64, true);
                     if (sim.isEmpty()) {
@@ -787,6 +791,37 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     }
 
 
+    /** Pulls fluid outputs out of the machine (same rules as for items: never what was just pushed in as input). */
+    private boolean pullFluids() {
+        var fluidHandler = level.getCapability(Capabilities.FluidHandler.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
+        if (fluidHandler == null) {
+            fluidHandler = level.getCapability(Capabilities.FluidHandler.BLOCK, getMachinePos(), null);
+        }
+        if (fluidHandler == null) {
+            return false;
+        }
+        boolean pulled = false;
+        for (int i = 0; i < fluidHandler.getTanks() && !inFlight.isEmpty(); i++) {
+            var inTank = fluidHandler.getFluidInTank(i);
+            if (inTank.isEmpty()) {
+                continue;
+            }
+            var key = AEFluidKey.of(inTank);
+            if (pendingInputKeys.contains(key) && !inFlight.expects(key)) {
+                continue;
+            }
+            var sim = fluidHandler.drain(inTank.copyWithAmount(inTank.getAmount()), IFluidHandler.FluidAction.SIMULATE);
+            if (sim.isEmpty()) {
+                continue;
+            }
+            var drained = fluidHandler.drain(sim, IFluidHandler.FluidAction.EXECUTE);
+            if (!drained.isEmpty()) {
+                handleOutputReturned(AEFluidKey.of(drained), drained.getAmount());
+                pulled = true;
+            }
+        }
+        return pulled;
+    }
     @Nullable
     @Override
     public IGridNode getActionableNode() {
