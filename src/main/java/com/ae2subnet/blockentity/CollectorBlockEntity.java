@@ -124,6 +124,44 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
         }
     }
 
+    /** One-line state report for the right-click message. */
+    public String getDiagnostics() {
+        var grid = getMainNode().getGrid();
+        if (level == null || grid == null) {
+            return "no grid";
+        }
+        var master = SubnetMasters.find(grid);
+        var service = grid.getService(ISubnetWorkerService.class);
+        StringBuilder sb = new StringBuilder();
+        sb.append("active=").append(getMainNode().isActive());
+        sb.append(" | master=").append(master == null ? "NONE" : (master.isMassMode() ? "mass" : "SINGLE mode"));
+        sb.append(" | outputs=").append(service == null ? "?" : service.getTotalWorkerCount(true));
+        for (Direction side : Direction.values()) {
+            BlockPos pos = getBlockPos().relative(side);
+            if (GridHelper.getExposedNode(level, pos, side.getOpposite()) != null) {
+                continue;
+            }
+            var handler = level.getCapability(Capabilities.Item.BLOCK, pos, side.getOpposite());
+            if (handler == null) {
+                continue;
+            }
+            int stacks = 0;
+            int expected = 0;
+            for (int i = 0; i < handler.size(); i++) {
+                var r = handler.getResource(i);
+                if (!r.isEmpty()) {
+                    stacks++;
+                    if (service != null && service.expectsOutput(AEItemKey.of(r))) {
+                        expected++;
+                    }
+                }
+            }
+            sb.append(" | ").append(side.getName()).append(": ").append(stacks).append(" stacks, ").append(expected).append(" awaited");
+        }
+        return sb.toString();
+    }
+
+
 
     @Override
     public TickingRequest getTickingRequest(IGridNode node) {
