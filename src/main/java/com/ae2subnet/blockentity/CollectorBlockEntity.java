@@ -87,30 +87,43 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
             if (GridHelper.getExposedNode(level, pos, face) != null) {
                 continue; // AE blocks are not machines
             }
-            var handler = level.getCapability(Capabilities.Item.BLOCK, pos, face);
-            if (handler == null) {
-                continue;
+            // Machines with side configuration only let items out on their output side: try the touching face first,
+            // then the unsided view and every other face
+            var tried = new java.util.ArrayList<ResourceHandler<ItemResource>>(7);
+            addHandler(tried, level.getCapability(Capabilities.Item.BLOCK, pos, face));
+            addHandler(tried, level.getCapability(Capabilities.Item.BLOCK, pos, null));
+            for (Direction other : Direction.values()) {
+                addHandler(tried, level.getCapability(Capabilities.Item.BLOCK, pos, other));
             }
-            for (int i = 0; i < handler.size(); i++) {
-                var resource = handler.getResource(i);
-                if (resource.isEmpty()) {
-                    continue;
-                }
-                var key = AEItemKey.of(resource);
-                if (!service.expectsOutput(key)) {
-                    continue;
-                }
-                try (var tx = Transaction.openRoot()) {
-                    int extracted = handler.extract(i, resource, Integer.MAX_VALUE, tx);
-                    if (extracted > 0 && deliver(key, extracted)) {
-                        tx.commit();
-                        pulled = true;
+            for (var handler : tried) {
+                for (int i = 0; i < handler.size(); i++) {
+                    var resource = handler.getResource(i);
+                    if (resource.isEmpty()) {
+                        continue;
+                    }
+                    var key = AEItemKey.of(resource);
+                    if (!service.expectsOutput(key)) {
+                        continue;
+                    }
+                    try (var tx = Transaction.openRoot()) {
+                        int extracted = handler.extract(i, resource, Integer.MAX_VALUE, tx);
+                        if (extracted > 0 && deliver(key, extracted)) {
+                            tx.commit();
+                            pulled = true;
+                        }
                     }
                 }
             }
         }
         return pulled;
     }
+
+    private static void addHandler(java.util.List<ResourceHandler<ItemResource>> list, @Nullable ResourceHandler<ItemResource> handler) {
+        if (handler != null && !list.contains(handler)) {
+            list.add(handler);
+        }
+    }
+
 
     @Override
     public TickingRequest getTickingRequest(IGridNode node) {
