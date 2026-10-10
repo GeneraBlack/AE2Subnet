@@ -338,22 +338,62 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
         if (perCraft.isEmpty()) {
             return false;
         }
-        var last = buffer.isEmpty() ? null : buffer.get(buffer.size() - 1);
-        if (last != null && last.perCraft.equals(perCraft)) {
-            last.crafts += factor;
-        } else {
-            buffer.add(new Pending(perCraft, factor));
-            com.ae2subnet.AE2Subnet.LOGGER.info("Loadbalancer {} buffered {} crafts: {}", getBlockPos(), factor, perCraft);
+        // The Loadbalancers that touch each other form one structure: a push is shared by all of them in proportion
+        // to the machines each one feeds, so no machine of the wall stays idle
+        List<LoadbalancerBlockEntity> pool = new ArrayList<>();
+        List<Integer> machineCounts = new ArrayList<>();
+        int totalMachines = 0;
+        var grid = getMainNode().getGrid();
+        if (grid != null) {
+            for (var other : grid.getMachines(LoadbalancerBlockEntity.class)) {
+                if (other != this && other.isValidWorker() && other.bufferedCrafts() < BUFFER_MAX_CRAFTS) {
+                    int m = other.machineSides().size();
+                    if (m > 0) {
+                        pool.add(other);
+                        machineCounts.add(m);
+                        totalMachines += m;
+                    }
+                }
+            }
         }
+        pool.add(this);
+        int own = machineSides().size();
+        machineCounts.add(own);
+        totalMachines += own;
 
+        int[] shares = new int[pool.size()];
+        int given = 0;
+        for (int i = 0; i < shares.length; i++) {
+            shares[i] = (int) ((long) factor * machineCounts.get(i) / totalMachines);
+            given += shares[i];
+        }
+        for (int k = 0, rest = factor - given; rest > 0; k++, rest--) {
+            shares[(nextSide + k) % shares.length]++;
+        }
+        nextSide++;
+        for (int i = 0; i < shares.length; i++) {
+            if (shares[i] > 0) {
+                pool.get(i).acceptShare(perCraft, shares[i]);
+            }
+        }
         var primary = patternDetails.getPrimaryOutput();
         inFlight.add(primary != null ? primary.what() : null, primary != null ? primary.amount() : 0);
         refreshWorkerState();
-        drain(); // hand over what fits right away
-        getMainNode().ifPresent((grid, node) -> grid.getTickManager().alertDevice(node));
         return true;
     }
 
+    /** Takes {@code crafts} crafts worth of inputs into the buffer; the machines get them as soon as they have room. */
+    private void acceptShare(List<GenericStack> perCraft, int crafts) {
+        var last = buffer.isEmpty() ? null : buffer.get(buffer.size() - 1);
+        if (last != null && last.perCraft.equals(perCraft)) {
+            last.crafts += crafts;
+        } else {
+            buffer.add(new Pending(new ArrayList<>(perCraft), crafts));
+        }
+        saveChanges();
+        drain(); // hand over what fits right away
+        getMainNode().ifPresent((g, node) -> g.getTickManager().alertDevice(node));
+    }
     /** Hands buffered crafts to the machines, spread evenly in whole crafts. @return whether anything moved */
     private boolean drain() {
         if (buffer.isEmpty() || level == null || !isValidWorker()) {
