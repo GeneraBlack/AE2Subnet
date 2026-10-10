@@ -101,7 +101,7 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
                     continue;
                 }
                 try (var tx = Transaction.openRoot()) {
-                    int extracted = handler.extract(i, resource, 64, tx);
+                    int extracted = handler.extract(i, resource, Integer.MAX_VALUE, tx);
                     if (extracted > 0 && deliver(key, extracted)) {
                         tx.commit();
                         pulled = true;
@@ -114,7 +114,7 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
 
     @Override
     public TickingRequest getTickingRequest(IGridNode node) {
-        return new TickingRequest(5, 20, false);
+        return new TickingRequest(1, 10, false);
     }
 
     @Override
