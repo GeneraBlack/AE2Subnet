@@ -33,9 +33,13 @@ import com.ae2subnet.block.SubPatternProviderBlock;
 import com.ae2subnet.init.ModBlockEntities;
 import com.ae2subnet.init.ModItems;
 import com.ae2subnet.init.ModMenuTypes;
+import com.ae2subnet.util.BatchLogic;
+import com.ae2subnet.util.BatchTracker;
 import com.ae2subnet.util.EnergyGrids;
 import com.ae2subnet.util.EnergyLogic;
 import com.ae2subnet.util.PatternPaging;
+import appeng.api.stacks.AEKey;
+import appeng.api.stacks.GenericStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -55,7 +59,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.lang.ref.WeakReference;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         implements ISubnetWorker, IActionHost, IGridTickable, ServerTickingBlockEntity, IUpgradeableObject {
@@ -65,6 +71,12 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     private boolean autoPull = true;
     private int busyHoldTicks = 0;
 
+    // Batch mode: crafts pushed into the machine that have not delivered their output yet (0 = Auto limit)
+    private int batchLimit = 0;
+    private final BatchTracker<AEKey> inFlight = new BatchTracker<>();
+    // Items pushed in as inputs while crafts are in flight; auto-pull must not take them back out
+    private final Set<AEKey> pendingInputKeys = new HashSet<>();
+    // Per-tick FE budget shared by active push and passive pull so the card limit really is "FE per tick"
     private long energyBudgetTick = -1;
     private int energyBudgetUsed = 0;
 
@@ -118,9 +130,9 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
     public void onReady() {
         onGridConnectableSidesChanged();
         super.onReady();
-        markFree();
-        markForUpdate();
+        refreshWorkerState();
     }
+
 
     @Override
     public void onChunkUnloaded() {
@@ -177,6 +189,8 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         data.putString("unlockMode", unlockMode.name());
         data.putBoolean("autoPull", autoPull);
         data.putInt("busyHoldTicks", busyHoldTicks);
+        data.putInt("batchLimit", batchLimit);
+        data.putInt("inFlight", inFlight.size());
         this.upgrades.writeToNBT(data, "upgrades", registries);
     }
 
@@ -201,7 +215,14 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         if (data.contains("busyHoldTicks")) {
             this.busyHoldTicks = data.getInt("busyHoldTicks");
         }
+        this.batchLimit = BatchLogic.sanitize(data.getInt("batchLimit"));
+        // Worlds from before batch mode only know OCCUPIED: that was exactly one craft in flight
+        int savedInFlight = data.contains("inFlight") ? data.getInt("inFlight") : (this.state == WorkerState.OCCUPIED ? 1 : 0);
+        this.inFlight.clear();
+        this.inFlight.addWildcards(Math.max(0, savedInFlight));
+        this.state = BatchLogic.hasCapacity(this.inFlight.size(), this.batchLimit) ? WorkerState.FREE : WorkerState.OCCUPIED;
         this.upgrades.readFromNBT(data, "upgrades", registries);
+
         int legacyCards = data.getInt("energyCards");
         if (legacyCards > 0 && upgrades.getInstalledUpgrades(AEItems.ENERGY_CARD) == 0) {
             for (int i = 0; i < Math.min(4, legacyCards); i++) {
@@ -220,7 +241,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         if (!hasPower) {
             return com.ae2subnet.api.SubnetDisplayStatus.OFFLINE;
         }
-        return (state == WorkerState.OCCUPIED || busyHoldTicks > 0)
+        return (!inFlight.isEmpty() || state == WorkerState.OCCUPIED || busyHoldTicks > 0)
                 ? com.ae2subnet.api.SubnetDisplayStatus.BUSY
                 : com.ae2subnet.api.SubnetDisplayStatus.IDLE;
     }
@@ -291,6 +312,21 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         markForUpdate();
     }
 
+    /** Configured batch limit: 0 = Auto, otherwise 1..{@link BatchLogic#MAX_BATCH}. */
+    public int getBatchLimit() {
+        return batchLimit;
+    }
+
+    public void cycleBatchLimit() {
+        this.batchLimit = BatchLogic.nextLimit(this.batchLimit);
+        refreshWorkerState();
+    }
+
+    /** Crafts pushed into the machine that have not delivered their output yet. */
+    public int getInFlightCrafts() {
+        return inFlight.size();
+    }
+
     public void openMenu(Player player, MenuHostLocator locator) {
         MenuOpener.open(ModMenuTypes.SUB_PATTERN_PROVIDER.get(), player, locator);
     }
@@ -339,7 +375,8 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
 
     @Override
     public boolean canAcceptInputs(KeyCounter[] inputHolder) {
-        if (level == null || state != WorkerState.FREE || !isValidWorker()) {
+        if (level == null || state != WorkerState.FREE || !isValidWorker()
+                || !BatchLogic.hasCapacity(inFlight.size(), batchLimit)) {
             return false;
         }
 
@@ -349,8 +386,9 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
                 if (target == null) {
                     return false;
                 }
+                // The machine must take the complete amount, otherwise part of the craft would be lost
                 long inserted = target.insert(input.getKey(), input.getLongValue(), Actionable.SIMULATE);
-                if (inserted == 0) {
+                if (inserted < input.getLongValue()) {
                     return false;
                 }
             }
@@ -368,30 +406,54 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
 
         patternDetails.pushInputsToExternalInventory(inputHolder, (what, amount) -> {
             var target = getTargetForInsert(what, amount, Actionable.MODULATE);
-            if (target != null) {
-                target.insert(what, amount, Actionable.MODULATE);
+            long inserted = target != null ? target.insert(what, amount, Actionable.MODULATE) : 0;
+            if (inserted < amount) {
+                deliverToNetwork(what, amount - inserted); // never lose what the machine did not take
+            } else {
+                pendingInputKeys.add(what);
             }
         });
 
-        markOccupied();
+        var primary = patternDetails.getPrimaryOutput();
+        inFlight.add(primary != null ? primary.what() : null, primary != null ? primary.amount() : 0);
+
+        busyHoldTicks = 20;
+        getMainNode().ifPresent((grid, gridNode) -> grid.getTickManager().alertDevice(gridNode));
+        refreshWorkerState();
         return true;
     }
 
-    @Override
-    public void markFree() {
-        this.state = WorkerState.FREE;
-        this.activeMaster = null;
+    /**
+     * Derives FREE/OCCUPIED from the crafts in flight and tells the worker service. A provider with spare batch
+     * capacity is re-queued at the tail, which spreads crafts evenly across all machines.
+     */
+    private void refreshWorkerState() {
+        boolean full = !BatchLogic.hasCapacity(inFlight.size(), batchLimit);
+        this.state = full ? WorkerState.OCCUPIED : WorkerState.FREE;
+        if (inFlight.isEmpty()) {
+            this.activeMaster = null;
+            this.pendingInputKeys.clear();
+        }
         var grid = getMainNode().getGrid();
         if (grid != null) {
             var service = grid.getService(ISubnetWorkerService.class);
             if (service != null) {
-                service.markFree(this);
+                if (full) {
+                    service.markOccupied(this);
+                } else {
+                    service.markFree(this);
+                }
             }
         }
         saveChanges();
-        if (this.busyHoldTicks <= 0) {
-            markForUpdate();
-        }
+        markForUpdate();
+    }
+
+    @Override
+    public void markFree() {
+        // External request to free the worker: forget everything in flight
+        inFlight.clear();
+        refreshWorkerState();
     }
 
     @Override
@@ -408,6 +470,7 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         saveChanges();
         markForUpdate();
     }
+
 
     public void serverTick() {
         if (this.busyHoldTicks > 0) {
@@ -563,16 +626,22 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
         if (key == null || amount <= 0) {
             return;
         }
+        deliverToNetwork(key, amount);
+
+        if (!inFlight.isEmpty() && inFlight.returned(key, amount) > 0) {
+            refreshWorkerState();
+        }
+    }
+
+    /** Sends an item/fluid back to the master (or straight into the network if there is no active master). */
+    private void deliverToNetwork(appeng.api.stacks.AEKey key, long amount) {
         if (activeMaster != null && activeMaster.get() != null) {
             activeMaster.get().acceptReturn(key, amount);
         } else if (getMainNode().isActive() && getMainNode().getGrid() != null) {
             getMainNode().getGrid().getStorageService().getInventory().insert(key, amount, Actionable.MODULATE, actionSource);
         }
-
-        if (state == WorkerState.OCCUPIED) {
-            markFree();
-        }
     }
+
 
     @Nullable
     public IItemHandler getItemHandler(@Nullable Direction side) {
@@ -665,11 +734,11 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
 
     @Override
     public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
-        if (level == null || level.isClientSide() || state != WorkerState.OCCUPIED) {
+        if (level == null || level.isClientSide() || inFlight.isEmpty()) {
             return TickRateModulation.IDLE;
         }
 
-        // Strategy 1: Check if machine is empty
+        // Strategy 1: Check if machine is empty -> every craft in flight is done
         if (unlockMode == UnlockMode.ON_MACHINE_EMPTY) {
             var itemHandler = level.getCapability(Capabilities.ItemHandler.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
             if (itemHandler != null) {
@@ -681,29 +750,42 @@ public class SubPatternProviderBlockEntity extends AENetworkedBlockEntity
                     }
                 }
                 if (empty) {
+                    inFlight.clear();
                     markFree();
                     return TickRateModulation.URGENT;
                 }
             }
         }
 
-        // Strategy 2: Active output pull fallback
+        // Strategy 2: Active output pull fallback (never pulls back items that were just pushed in as inputs)
         if (autoPull) {
             var itemHandler = level.getCapability(Capabilities.ItemHandler.BLOCK, getMachinePos(), getMachineFacing().getOpposite());
             if (itemHandler != null) {
-                for (int i = 0; i < itemHandler.getSlots(); i++) {
+                boolean pulled = false;
+                for (int i = 0; i < itemHandler.getSlots() && !inFlight.isEmpty(); i++) {
                     var sim = itemHandler.extractItem(i, 64, true);
-                    if (!sim.isEmpty()) {
-                        var extracted = itemHandler.extractItem(i, 64, false);
-                        handleOutputReturned(AEItemKey.of(extracted), extracted.getCount());
-                        return TickRateModulation.URGENT;
+                    if (sim.isEmpty()) {
+                        continue;
                     }
+                    var key = AEItemKey.of(sim);
+                    if (pendingInputKeys.contains(key) && !inFlight.expects(key)) {
+                        continue;
+                    }
+                    var extracted = itemHandler.extractItem(i, 64, false);
+                    if (!extracted.isEmpty()) {
+                        handleOutputReturned(AEItemKey.of(extracted), extracted.getCount());
+                        pulled = true;
+                    }
+                }
+                if (pulled) {
+                    return TickRateModulation.URGENT;
                 }
             }
         }
 
         return TickRateModulation.SAME;
     }
+
 
     @Nullable
     @Override

@@ -65,6 +65,30 @@ public class AE2Subnet {
                 ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
                 (be, side) -> be.getFluidHandler(side)
         );
+
+        // Mass mode: loadbalancer and collector are grid nodes, the collector takes items/fluids from every side
+        event.registerBlockEntity(
+                AECapabilities.IN_WORLD_GRID_NODE_HOST,
+                ModBlockEntities.LOADBALANCER.get(),
+                (be, context) -> be
+        );
+        event.registerBlockEntity(
+                AECapabilities.IN_WORLD_GRID_NODE_HOST,
+                ModBlockEntities.COLLECTOR.get(),
+                (be, context) -> be
+        );
+        event.registerBlockEntity(
+                Capabilities.ItemHandler.BLOCK,
+                ModBlockEntities.COLLECTOR.get(),
+                (be, side) -> be.getItemHandler(side)
+        );
+        event.registerBlockEntity(
+                Capabilities.FluidHandler.BLOCK,
+                ModBlockEntities.COLLECTOR.get(),
+                (be, side) -> be.getFluidHandler(side)
+        );
+
+        // Energy capabilities (FE supply & high-power input)
         event.registerBlockEntity(
                 Capabilities.EnergyStorage.BLOCK,
                 ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
@@ -89,6 +113,16 @@ public class AE2Subnet {
                     ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
                     ModItems.SUB_PATTERN_PROVIDER.get()
             );
+            AEBaseBlockEntity.registerBlockEntityItem(
+                    ModBlockEntities.LOADBALANCER.get(),
+                    ModItems.LOADBALANCER.get()
+            );
+            AEBaseBlockEntity.registerBlockEntityItem(
+                    ModBlockEntities.COLLECTOR.get(),
+                    ModItems.COLLECTOR.get()
+            );
+
+            // Register Capacity Card upgrades for Master Pattern Provider
             appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.CAPACITY_CARD, ModBlocks.MASTER_PATTERN_PROVIDER.get(), 4);
             appeng.api.upgrades.Upgrades.add(appeng.core.definitions.AEItems.ENERGY_CARD, ModBlocks.SUB_PATTERN_PROVIDER.get(), 4);
         });

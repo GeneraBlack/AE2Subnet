@@ -59,10 +59,29 @@ Encode your processing pattern **once** into the **Master Pattern Provider**. Th
   - Automatically intercepts craft outputs and returns them to main network storage.
   - Active auto-pull fallback for non-ejecting machines.
 - 📊 **Live Telemetry HUD**: Monitor subnet health, channel availability, power status, and real-time worker counters directly in the Master GUI.
+- **Batch Mode**: A Sub-Pattern Provider can keep several crafts in flight per machine (Auto = machine capacity, or 1-64 via the GUI button), so big machines are fully used.
+- **Single / Mass Mode**: A subnet runs either in *Single* mode (Master + Sub-Pattern Providers) or in *Mass* mode (Master + Loadbalancer + Collector). Toggle it in the Master GUI.
+- **Loadbalancer & Collector (Mass Mode)**: Loadbalancers feed every machine they touch and share each push evenly over the whole wall. Collectors take the outputs (and byproducts) back and hand them to the Master.
+- **Pattern Scaling (Mass Mode)**: The Master can offer a pattern as N crafts at once (Off / Auto / x4 - x1024), so a single push of the crafting CPU fills huge machines such as Mekanism factories.
+- **Upgrade Tooltips**: Capacity and Energy Cards explain on the item what they do in our blocks.
 - 🎨 **Authentic AE2 Aesthetics**: Animated Fluix conduits, glowing cyan subnet port, and responsive status indicator LEDs.
 
 ---
 
+## Mass Mode
+
+For arrays of big machines (Mekanism factories, rows of furnaces) the Master Pattern Provider can switch its subnet to **Mass mode**:
+
+```
+[Master Pattern Provider] --- subnet --- [Loadbalancer wall] --> machines --> [Collector wall] --- back to the Master
+```
+
+- **Subnet Loadbalancer** (output): place it directly against machines. Touching Loadbalancers form one structure; each push is shared over all of them and spread evenly over the machines. Items are only inserted through the face that touches the machine, so configure the machine's input side.
+- **Subnet Collector** (input): place it against the machines' output side (or feed it with hoppers/pipes). It takes expected outputs and byproducts and returns them to the Master. Right-click it for a diagnostics line.
+- **Scale button** in the Master GUI (Mass mode only): `Off`, `Auto` (measured machine capacity) or a fixed limit `x4` to `x1024`. One push of the crafting CPU then carries that many crafts. A craft may overproduce up to the factor; the surplus goes into storage.
+- A subnet is either in Single or in Mass mode; blocks of the other mode are ignored and shown in the Master HUD.
+
+---
 ## 📖 Quick Start Guide
 
 1. Place the **Master Pattern Provider** connected to your main ME network.

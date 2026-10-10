@@ -55,6 +55,11 @@ You encode your processing pattern **once** into the **Master Pattern Provider**
   - Real-time Channel state (`1 Channel` / `Offline`)
   - Subnet Power state (`Active` / `Bridged` / `Unpowered`)
   - Live worker counter (`Total Workers`, `Idle`, and `Busy`)
+* **Batch Mode**: Sub-Pattern Providers keep several crafts in flight per machine (Auto or 1-64), so big machines are fully used.
+* **Single / Mass Mode**: Toggle the subnet in the Master GUI between Sub-Pattern Providers (Single) and Loadbalancer + Collector (Mass).
+* **Loadbalancer & Collector**: Loadbalancers feed every machine they touch and share each push over the whole wall; Collectors return outputs and byproducts to the Master.
+* **Pattern Scaling**: In Mass mode the Master offers a pattern as N crafts at once (Off / Auto / x4-x1024), so one push of the crafting CPU fills huge machines like Mekanism factories.
+* **Upgrade Tooltips**: Capacity and Energy Cards show what they do in our blocks.
 * 🎨 **Authentic AE2 Visuals & Animations**:
   - **Master Provider**: Distinct glowing cyan subnet port with animated concentric ring pulses, and Fluix purple conduits on main network sides.
   - **Sub-Pattern Provider**: Features active state indicators—cyan energy loop in `IDLE`, glowing amber data pulse during `BUSY` crafts, and deactivated LED when offline.

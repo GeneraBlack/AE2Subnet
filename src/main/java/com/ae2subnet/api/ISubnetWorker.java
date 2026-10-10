@@ -1,6 +1,7 @@
 package com.ae2subnet.api;
 
 import appeng.api.crafting.IPatternDetails;
+import appeng.api.stacks.AEKey;
 import appeng.api.stacks.KeyCounter;
 import net.minecraft.core.BlockPos;
 
@@ -18,4 +19,35 @@ public interface ISubnetWorker {
     BlockPos getWorkerPos();
 
     boolean isValidWorker();
+
+    default boolean isRemoved() {
+        return false;
+    }
+
+    /**
+     * True for workers of the mass mode (Loadbalancer outputs). The subnet only uses workers that match the mode of
+     * its master.
+     */
+    default boolean isMassWorker() {
+        return false;
+    }
+
+    /** True if this worker still waits for an output of this kind (used by collectors). */
+    default boolean expectsOutput(AEKey key) {
+        return false;
+    }
+
+    /**
+     * Books an output that a collector took from a machine against this worker's pending crafts.
+     *
+     * @return the part of {@code amount} that belonged to this worker
+     */
+    default long creditOutput(AEKey key, long amount) {
+        return 0;
+    }
+
+    /** True if crafts restored from disk wait for an output of unknown kind (they accept any pattern output). */
+    default boolean hasRestoredCrafts() {
+        return false;
+    }
 }

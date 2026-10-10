@@ -1,6 +1,7 @@
 package com.ae2subnet.client;
 
 import com.ae2subnet.menu.SubPatternProviderMenu;
+import com.ae2subnet.util.BatchLogic;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -18,6 +19,7 @@ public class SubPatternProviderScreen extends AbstractContainerScreen<SubPattern
     private static final int HUD_RIGHT = 216;
 
     private Button facingBtn;
+    private Button batchBtn;
     private Button modeBtn;
     private Button pullBtn;
 
@@ -33,11 +35,17 @@ public class SubPatternProviderScreen extends AbstractContainerScreen<SubPattern
         this.leftPos = (this.width - this.imageWidth) / 2;
         this.topPos = (this.height - this.imageHeight) / 2;
 
-        this.facingBtn = Button.builder(Component.literal("Facing: NORTH"), b -> {
+        this.facingBtn = Button.builder(Component.literal("Face: NORTH"), b -> {
             if (this.minecraft != null && this.minecraft.gameMode != null) {
                 this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 0);
             }
-        }).bounds(this.leftPos + 26, this.topPos + 68, 148, 17).build();
+        }).bounds(this.leftPos + 26, this.topPos + 68, 72, 17).build();
+
+        this.batchBtn = Button.builder(Component.literal("Batch: Auto"), b -> {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 3);
+            }
+        }).bounds(this.leftPos + 102, this.topPos + 68, 72, 17).build();
 
         this.modeBtn = Button.builder(Component.literal("Unlock: On Return"), b -> {
             if (this.minecraft != null && this.minecraft.gameMode != null) {
@@ -52,6 +60,7 @@ public class SubPatternProviderScreen extends AbstractContainerScreen<SubPattern
         }).bounds(this.leftPos + 26, this.topPos + 108, 148, 17).build();
 
         this.addRenderableWidget(facingBtn);
+        this.addRenderableWidget(batchBtn);
         this.addRenderableWidget(modeBtn);
         this.addRenderableWidget(pullBtn);
     }
@@ -61,7 +70,10 @@ public class SubPatternProviderScreen extends AbstractContainerScreen<SubPattern
         super.containerTick();
         if (facingBtn != null) {
             Direction dir = Direction.from3DDataValue(menu.machineFacing);
-            facingBtn.setMessage(Component.literal("Facing: " + dir.getName().toUpperCase()));
+            facingBtn.setMessage(Component.literal("Face: " + dir.getName().toUpperCase()));
+        }
+        if (batchBtn != null) {
+            batchBtn.setMessage(Component.literal("Batch: " + BatchLogic.label(menu.batchLimit)));
         }
         if (modeBtn != null) {
             String modeStr = menu.unlockMode == 0 ? "On Return" : "On Empty";
@@ -71,6 +83,7 @@ public class SubPatternProviderScreen extends AbstractContainerScreen<SubPattern
             pullBtn.setMessage(Component.literal("Auto-Pull: " + (menu.autoPull ? "ON" : "OFF")));
         }
     }
+
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
@@ -87,11 +100,12 @@ public class SubPatternProviderScreen extends AbstractContainerScreen<SubPattern
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         // Top Header
         guiGraphics.drawString(this.font, Component.literal("Sub-Pattern Provider"), 10, 6, 0xE0E0E0, false);
+        boolean busy = menu.workerState == 1 || menu.inFlight > 0;
         String statusStr = menu.subnetPowered
-                ? (menu.workerState == 1 ? "● BUSY" : "● IDLE")
+                ? (busy ? "● BUSY" : "● IDLE")
                 : "○ OFFLINE";
         int statusColor = menu.subnetPowered
-                ? (menu.workerState == 1 ? 0xFFAA00 : 0x55FF55)
+                ? (busy ? 0xFFAA00 : 0x55FF55)
                 : 0xFF5555;
         guiGraphics.drawString(this.font, Component.literal(statusStr).withColor(statusColor),
                 HUD_RIGHT - this.font.width(statusStr), 6, statusColor, false);
@@ -105,6 +119,9 @@ public class SubPatternProviderScreen extends AbstractContainerScreen<SubPattern
 
         String rateStr = "Rate: §a" + String.format("%,d", menu.maxEnergyRate) + " FE/t";
         guiGraphics.drawString(this.font, rateStr, HUD_LEFT, 36, 0xFFFFFF, false);
+
+        String craftsStr = "Crafts: §e" + menu.inFlight + "/" + BatchLogic.effectiveLimit(menu.batchLimit);
+        guiGraphics.drawString(this.font, craftsStr, HUD_RIGHT - this.font.width(craftsStr), 36, 0xFFFFFF, false);
 
         String guardStr = menu.brownoutHalted ? "Grid: §cHalted (<20%)" : "Grid: §aNormal (>20%)";
         guiGraphics.drawString(this.font, guardStr, HUD_LEFT, 48, 0xFFFFFF, false);

@@ -37,6 +37,12 @@ public class SubPatternProviderMenu extends AEBaseMenu {
     @GuiSync(7)
     public int energyCardCount = 0;
 
+    @GuiSync(8)
+    public int batchLimit = 0; // 0 = Auto
+
+    @GuiSync(9)
+    public int inFlight = 0; // crafts pushed into the machine whose output is still missing
+
     public SubPatternProviderMenu(int id, Inventory playerInventory, SubPatternProviderBlockEntity host) {
         super(ModMenuTypes.SUB_PATTERN_PROVIDER.get(), id, playerInventory, host);
         this.host = host;
@@ -77,6 +83,8 @@ public class SubPatternProviderMenu extends AEBaseMenu {
             this.maxEnergyRate = host.getMaxEnergyTransferRate();
             this.brownoutHalted = host.isBrownoutHalted();
             this.energyCardCount = host.getEnergyCards();
+            this.batchLimit = host.getBatchLimit();
+            this.inFlight = host.getInFlightCrafts();
         }
         super.broadcastChanges();
     }
@@ -95,9 +103,14 @@ public class SubPatternProviderMenu extends AEBaseMenu {
             host.toggleAutoPull();
             broadcastChanges();
             return true;
+        } else if (id == 3) { // Cycle batch limit
+            host.cycleBatchLimit();
+            broadcastChanges();
+            return true;
         }
         return super.clickMenuButton(player, id);
     }
+
 
     public SubPatternProviderBlockEntity getHost() {
         return host;

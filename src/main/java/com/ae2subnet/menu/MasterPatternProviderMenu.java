@@ -7,6 +7,7 @@ import appeng.menu.SlotSemantics;
 import appeng.menu.guisync.GuiSync;
 import appeng.util.inv.AppEngInternalInventory;
 import com.ae2subnet.api.ISubnetWorkerService;
+import com.ae2subnet.blockentity.CollectorBlockEntity;
 import com.ae2subnet.blockentity.MasterPatternProviderBlockEntity;
 import com.ae2subnet.init.ModMenuTypes;
 import com.ae2subnet.util.PatternPaging;
@@ -138,6 +139,18 @@ public class MasterPatternProviderMenu extends AEBaseMenu {
     @GuiSync(8)
     public int maxPages = 1;
 
+    @GuiSync(9)
+    public boolean massMode = false;
+
+    @GuiSync(10)
+    public int foreignWorkers = 0; // workers of the other mode, ignored by this subnet
+
+    @GuiSync(11)
+    public int collectors = 0;
+
+    @GuiSync(12)
+    public int scaleMode = 1;
+
     public MasterPatternProviderMenu(int id, Inventory playerInventory, MasterPatternProviderBlockEntity host) {
         super(ModMenuTypes.MASTER_PATTERN_PROVIDER.get(), id, playerInventory, host);
         this.host = host;
@@ -182,22 +195,24 @@ public class MasterPatternProviderMenu extends AEBaseMenu {
     @Override
     public void broadcastChanges() {
         if (isServerSide()) {
+            boolean mass = host.isMassMode();
+            this.massMode = mass;
+            this.scaleMode = host.getScaleMode();
+            this.totalWorkers = 0;
+            this.idleWorkers = 0;
+            this.busyWorkers = 0;
+            this.foreignWorkers = 0;
+            this.collectors = 0;
             var subnetGrid = host.getSubnetNode().getGrid();
             if (subnetGrid != null) {
                 var service = subnetGrid.getService(ISubnetWorkerService.class);
                 if (service != null) {
-                    this.totalWorkers = service.getTotalWorkerCount();
-                    this.idleWorkers = service.getIdleWorkerCount();
-                    this.busyWorkers = service.getBusyWorkerCount();
-                } else {
-                    this.totalWorkers = 0;
-                    this.idleWorkers = 0;
-                    this.busyWorkers = 0;
+                    this.totalWorkers = service.getTotalWorkerCount(mass);
+                    this.idleWorkers = service.getIdleWorkerCount(mass);
+                    this.busyWorkers = service.getBusyWorkerCount(mass);
+                    this.foreignWorkers = service.getTotalWorkerCount(!mass);
                 }
-            } else {
-                this.totalWorkers = 0;
-                this.idleWorkers = 0;
-                this.busyWorkers = 0;
+                this.collectors = subnetGrid.getMachines(CollectorBlockEntity.class).size();
             }
             this.priority = host.getPatternPriority();
             this.mainActive = host.getMainNode().isActive();
@@ -224,9 +239,18 @@ public class MasterPatternProviderMenu extends AEBaseMenu {
                 broadcastChanges();
                 return true;
             }
+        } else if (id == 2) { // Toggle individual / mass mode
+            host.toggleMassMode();
+            broadcastChanges();
+            return true;
+        } else if (id == 3) { // Cycle the pattern scale (mass mode)
+            host.cycleScaleMode();
+            broadcastChanges();
+            return true;
         }
         return super.clickMenuButton(player, id);
     }
+
 
     public MasterPatternProviderBlockEntity getHost() {
         return host;

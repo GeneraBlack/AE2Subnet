@@ -20,6 +20,14 @@ public class ModItems {
             () -> new BlockItem(ModBlocks.SUB_PATTERN_PROVIDER.get(), new Item.Properties())
     );
 
+    public static final DeferredItem<BlockItem> LOADBALANCER = ITEMS.registerSimpleBlockItem(
+            ModBlocks.LOADBALANCER
+    );
+
+    public static final DeferredItem<BlockItem> COLLECTOR = ITEMS.registerSimpleBlockItem(
+            ModBlocks.COLLECTOR
+    );
+
     public static void register(IEventBus bus) {
         ITEMS.register(bus);
     }

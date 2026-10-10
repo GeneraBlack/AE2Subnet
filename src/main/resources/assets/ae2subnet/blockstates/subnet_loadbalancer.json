@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "status=idle": { "model": "ae2subnet:block/subnet_loadbalancer_idle" },
+    "status=busy": { "model": "ae2subnet:block/subnet_loadbalancer_busy" },
+    "status=offline": { "model": "ae2subnet:block/subnet_loadbalancer_offline" }
+  }
+}

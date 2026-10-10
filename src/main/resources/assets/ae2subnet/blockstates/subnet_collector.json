@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "ae2subnet:block/subnet_collector" }
+  }
+}

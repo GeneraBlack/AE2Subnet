@@ -9,6 +9,12 @@ import appeng.api.networking.GridHelper;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.crafting.ICraftingProvider;
+import appeng.api.networking.ticking.IGridTickable;
+import appeng.api.networking.ticking.TickRateModulation;
+import appeng.api.networking.ticking.TickingRequest;
+import appeng.crafting.pattern.AEProcessingPattern;
+import com.ae2subnet.util.ScaleLogic;
+import com.ae2subnet.util.ScaledPattern;
 import appeng.api.networking.security.IActionHost;
 import appeng.api.networking.security.IActionSource;
 import appeng.api.stacks.GenericStack;
@@ -53,7 +59,7 @@ import java.util.EnumSet;
 import java.util.List;
 
 public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
-        implements ICraftingProvider, IMasterPatternProvider, InternalInventoryHost, IActionHost, IUpgradeableObject {
+        implements ICraftingProvider, IGridTickable, IMasterPatternProvider, InternalInventoryHost, IActionHost, IUpgradeableObject {
 
     private final IManagedGridNode subnetNode = GridHelper.createManagedNode(this, BlockEntityNodeListener.INSTANCE)
             .setVisualRepresentation(ModItems.MASTER_PATTERN_PROVIDER.get())
@@ -68,6 +74,11 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
 
     private int priority = 0;
     private long lastFeInsertTime = Long.MIN_VALUE / 2;
+    private boolean massMode = false;
+    private int scaleMode = ScaleLogic.MODE_AUTO;
+    private final List<IPatternDetails> basePatterns = new ArrayList<>();
+    private final java.util.Map<IPatternDetails, Integer> observedCapacity = new java.util.HashMap<>();
+    private int lastBalancerCount = -1;
 
     public MasterPatternProviderBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.MASTER_PATTERN_PROVIDER.get(), pos, blockState);
@@ -79,6 +90,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
                 .setVisualRepresentation(ModItems.MASTER_PATTERN_PROVIDER.get())
                 .setFlags(GridFlags.REQUIRE_CHANNEL)
                 .addService(ICraftingProvider.class, this)
+                .addService(IGridTickable.class, this)
                 .addService(IEnergyOverlayGridConnection.class, this::getSubnetEnergyServices)
                 .setIdlePowerUsage(2.0);
     }
@@ -216,6 +228,8 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         this.patternInventory.writeToNBT(data, "patterns", registries);
         this.upgrades.writeToNBT(data, "upgrades", registries);
         data.putInt("priority", this.priority);
+        data.putBoolean("massMode", this.massMode);
+        data.putInt("scaleMode", this.scaleMode);
     }
 
     @Override
@@ -225,13 +239,34 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         this.patternInventory.readFromNBT(data, "patterns", registries);
         this.upgrades.readFromNBT(data, "upgrades", registries);
         this.priority = data.getInt("priority");
+        this.massMode = data.getBoolean("massMode");
+        this.scaleMode = data.contains("scaleMode")
+                ? Math.floorMod(data.getInt("scaleMode"), ScaleLogic.MODE_COUNT)
+                : ScaleLogic.MODE_AUTO;
         if (hasLevel()) {
             this.updatePatterns();
         }
     }
 
+    @Override
+    public boolean isMassMode() {
+        return massMode;
+    }
+
+    /** Switches the subnet between individual mode (Sub-Pattern Providers) and mass mode (Loadbalancer + Collector). */
+    public void toggleMassMode() {
+        this.massMode = !this.massMode;
+        observedCapacity.clear();
+        if (massMode && scaleMode != ScaleLogic.MODE_OFF) {
+            measureCapacities();
+        }
+        rebuildExposedPatterns();
+        saveChanges();
+        markForUpdate();
+    }
+
     public void updatePatterns() {
-        patterns.clear();
+        basePatterns.clear();
         if (level != null && !level.isClientSide()) {
             int maxSlots = getMaxPages() * PatternPaging.PAGE_SIZE;
             for (int i = 0; i < maxSlots; i++) {
@@ -239,13 +274,120 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
                 if (!stack.isEmpty()) {
                     var details = PatternDetailsHelper.decodePattern(stack, level);
                     if (details != null) {
-                        patterns.add(details);
+                        basePatterns.add(details);
                     }
                 }
+            }
+        }
+        rebuildExposedPatterns();
+    }
+
+    /** Publishes the patterns, scaled to the current factor where mass mode allows it. */
+    private void rebuildExposedPatterns() {
+        patterns.clear();
+        if (level != null && !level.isClientSide()) {
+            for (var base : basePatterns) {
+                int factor = massMode && base instanceof AEProcessingPattern
+                        ? ScaleLogic.resolveFactor(scaleMode, observedCapacity.getOrDefault(base, 0))
+                        : 1;
+                patterns.add(factor > 1 ? new ScaledPattern(base, factor) : base);
             }
             ICraftingProvider.requestUpdate(getMainNode());
         }
     }
+
+    @Override
+    public boolean isPatternOutput(appeng.api.stacks.AEKey key) {
+        for (var base : basePatterns) {
+            for (var out : base.getOutputs()) {
+                if (out.what().equals(key)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean isPatternInput(appeng.api.stacks.AEKey key) {
+        for (var base : basePatterns) {
+            for (var in : base.getInputs()) {
+                for (var possible : in.getPossibleInputs()) {
+                    if (possible.what().equals(key)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isKnownPattern(IPatternDetails details) {
+        return patterns.contains(details) || basePatterns.contains(ScaledPattern.unwrap(details));
+    }
+
+    /**
+     * Measures how many crafts of each pattern one push can hand to the machines. The highest value seen is kept, so a
+     * pattern does not shrink while the machines are momentarily full (running jobs keep their pattern).
+     */
+    private void measureCapacities() {
+        var grid = this.subnetNode.getGrid();
+        if (grid == null) {
+            return;
+        }
+        var balancers = grid.getMachines(LoadbalancerBlockEntity.class);
+        if (balancers.size() != lastBalancerCount) {
+            lastBalancerCount = balancers.size();
+            observedCapacity.clear();
+        }
+        boolean changed = false;
+        for (var base : basePatterns) {
+            if (!(base instanceof AEProcessingPattern)) {
+                continue;
+            }
+            int best = observedCapacity.getOrDefault(base, 0);
+            for (var balancer : balancers) {
+                best = Math.max(best, balancer.craftCapacity(base));
+            }
+            if (best != observedCapacity.getOrDefault(base, 0)) {
+                observedCapacity.put(base, best);
+                changed = true;
+            }
+        }
+        if (changed) {
+            rebuildExposedPatterns();
+        }
+    }
+
+    @Override
+    public TickingRequest getTickingRequest(IGridNode node) {
+        return new TickingRequest(100, 100, false);
+    }
+
+    @Override
+    public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
+        if (level != null && !level.isClientSide() && massMode && scaleMode != ScaleLogic.MODE_OFF) {
+            measureCapacities();
+        }
+        return TickRateModulation.SAME;
+    }
+
+    public int getScaleMode() {
+        return scaleMode;
+    }
+
+    /** Switches to the next scale mode: off, auto, or a fixed upper limit for the factor. */
+    public void cycleScaleMode() {
+        this.scaleMode = ScaleLogic.nextMode(this.scaleMode);
+        observedCapacity.clear();
+        if (massMode && scaleMode != ScaleLogic.MODE_OFF) {
+            measureCapacities();
+        }
+        rebuildExposedPatterns();
+        saveChanges();
+        markForUpdate();
+    }
+
 
     @Override
     public void saveChangedInventory(AppEngInternalInventory inv) {
@@ -281,7 +423,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
 
     @Override
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolder) {
-        if (!getMainNode().isActive() || !this.subnetNode.isActive() || !this.patterns.contains(patternDetails)) {
+        if (!getMainNode().isActive() || !this.subnetNode.isActive() || !isKnownPattern(patternDetails)) {
             return false;
         }
 
@@ -309,7 +451,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
             return true;
         }
         var service = subnetGrid.getService(ISubnetWorkerService.class);
-        return service == null || service.getIdleWorkerCount() == 0;
+        return service == null || service.getIdleWorkerCount(massMode) == 0;
     }
 
     @Override

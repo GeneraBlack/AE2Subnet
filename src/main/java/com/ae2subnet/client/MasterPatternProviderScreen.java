@@ -18,6 +18,8 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
 
     private Button prevBtn;
     private Button nextBtn;
+    private Button modeBtn;
+    private Button scaleBtn;
 
     public MasterPatternProviderScreen(MasterPatternProviderMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -43,8 +45,25 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
             }
         }).bounds(this.leftPos + 160, this.topPos + 66, 14, 12).build();
 
+        this.modeBtn = Button.builder(Component.literal("Single"), b -> {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 2);
+            }
+        }).bounds(this.leftPos + 94, this.topPos + 66, 46, 12).build();
+
+        this.scaleBtn = Button.builder(Component.literal("Auto"), b -> {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 3);
+            }
+        }).bounds(this.leftPos + 176, this.topPos + 66, 32, 12)
+          .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal(
+                  "Pattern scale (mass mode): one push of the crafting CPU carries this many crafts. Off / Auto (machine capacity) / fixed upper limit.")))
+          .build();
+
         this.addRenderableWidget(prevBtn);
+        this.addRenderableWidget(scaleBtn);
         this.addRenderableWidget(nextBtn);
+        this.addRenderableWidget(modeBtn);
     }
 
     @Override
@@ -55,6 +74,15 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
         }
         if (nextBtn != null) {
             nextBtn.active = menu.currentPage < menu.maxPages - 1;
+        }
+        if (scaleBtn != null) {
+            scaleBtn.visible = menu.massMode;
+            String s = menu.scaleMode == 0 ? "Off" : menu.scaleMode == 1 ? "Auto"
+                    : "x" + com.ae2subnet.util.ScaleLogic.FIXED_LEVELS[Math.min(menu.scaleMode - 2, com.ae2subnet.util.ScaleLogic.FIXED_LEVELS.length - 1)];
+            scaleBtn.setMessage(Component.literal(s));
+        }
+        if (modeBtn != null) {
+            modeBtn.setMessage(Component.literal(menu.massMode ? "Mass" : "Single"));
         }
     }
 
@@ -73,16 +101,24 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         // Top Header
         guiGraphics.drawString(this.font, Component.literal("Master Pattern Provider"), 10, 6, 0xE0E0E0, false);
+        String modeStr = menu.massMode ? "Mode: §6Mass" : "Mode: §bSingle";
+        guiGraphics.drawString(this.font, modeStr, HUD_RIGHT - this.font.width(modeStr), 6, 0xFFFFFF, false);
 
         // Telemetry HUD (left column + right-aligned column, one row each)
-        String statusStr = menu.totalWorkers > 0 ? "§a● SUBNET ONLINE" : "§c○ NO WORKERS";
+        String statusStr;
+        if (menu.massMode && menu.collectors == 0) {
+            statusStr = "§e⚠ NO COLLECTOR";
+        } else {
+            statusStr = menu.totalWorkers > 0 ? "§a● SUBNET ONLINE" : "§c○ NO WORKERS";
+        }
         guiGraphics.drawString(this.font, statusStr, HUD_LEFT, 24, 0xFFFFFF, false);
 
         String powerStr = menu.externalEnergyConnected ? "Power: §aFE Direct" :
                 (menu.subnetPowered ? "Power: §aActive" : (menu.mainActive ? "Power: §eBridged" : "Power: §cUnpowered"));
         guiGraphics.drawString(this.font, powerStr, HUD_RIGHT - this.font.width(powerStr), 24, 0xFFFFFF, false);
 
-        String workerCount = "Workers: §f" + menu.totalWorkers;
+        String workerCount = (menu.massMode ? "Outputs: §f" : "Workers: §f") + menu.totalWorkers
+                + (menu.foreignWorkers > 0 ? " §c+" + menu.foreignWorkers + " other" : "");
         guiGraphics.drawString(this.font, workerCount, HUD_LEFT, 36, 0xFFFFFF, false);
 
         String workerStates = "Idle: §a" + menu.idleWorkers + " §7| Busy: §6" + menu.busyWorkers;

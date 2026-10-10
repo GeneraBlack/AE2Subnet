@@ -21,6 +21,8 @@ public class ModCreativeTabs {
                     .displayItems((parameters, output) -> {
                         output.accept(ModItems.MASTER_PATTERN_PROVIDER.get());
                         output.accept(ModItems.SUB_PATTERN_PROVIDER.get());
+                        output.accept(ModItems.LOADBALANCER.get());
+                        output.accept(ModItems.COLLECTOR.get());
                     })
                     .build()
     );
