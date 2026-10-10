@@ -3,6 +3,9 @@ package com.ae2subnet.blockentity;
 import appeng.api.config.Actionable;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.networking.IGridNode;
+import appeng.api.networking.ticking.IGridTickable;
+import appeng.api.networking.ticking.TickRateModulation;
+import appeng.api.networking.ticking.TickingRequest;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.GridHelper;
 import appeng.api.networking.security.IActionHost;
@@ -42,7 +45,7 @@ import java.util.List;
  * Neighbouring Loadbalancer blocks connect through the AE2 grid on their own, so a wall of them acts as one structure
  * without cables or channels. Outputs come back through {@link CollectorBlockEntity collectors}.
  */
-public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements ISubnetWorker, IActionHost {
+public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements ISubnetWorker, IActionHost, IGridTickable {
 
     private WorkerState state = WorkerState.FREE;
     private final BatchTracker<AEKey> inFlight = new BatchTracker<>();
@@ -58,6 +61,7 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
         return super.createMainNode()
                 .setVisualRepresentation(ModItems.LOADBALANCER.get())
                 .addService(ISubnetWorker.class, this)
+                .addService(IGridTickable.class, this)
                 .setIdlePowerUsage(0.5);
     }
 
@@ -102,6 +106,15 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
             }
         }
         data.putInt("inFlight", wildcards); // crafts whose output is unknown (also what older versions saved)
+        var buf = data.childrenList("buffer");
+        for (var p : buffer) {
+            var child = buf.addChild();
+            child.putInt("crafts", p.crafts);
+            var inputs = child.list("inputs", GenericStack.CODEC);
+            for (var in : p.perCraft) {
+                inputs.add(in);
+            }
+        }
     }
 
     @Override
@@ -112,6 +125,17 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
             inFlight.add(stack.what(), stack.amount());
         }
         inFlight.addWildcards(Math.max(0, data.getIntOr("inFlight", 0)));
+        buffer.clear();
+        for (var child : data.childrenListOrEmpty("buffer")) {
+            List<GenericStack> inputs = new ArrayList<>();
+            for (var in : child.listOrEmpty("inputs", GenericStack.CODEC)) {
+                inputs.add(in);
+            }
+            int crafts = child.getIntOr("crafts", 0);
+            if (!inputs.isEmpty() && crafts > 0) {
+                buffer.add(new Pending(inputs, crafts));
+            }
+        }
         state = inFlight.size() >= capacity() ? WorkerState.OCCUPIED : WorkerState.FREE;
     }
 
@@ -181,17 +205,6 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
         return true;
     }
 
-    /** Index into {@code sides} of the next machine (starting at the round-robin pointer) that takes the whole craft. */
-    private int findMachine(List<Direction> sides, KeyCounter[] inputHolder) {
-        for (int n = 0; n < sides.size(); n++) {
-            int idx = (nextSide + n) % sides.size();
-            if (acceptsAll(sides.get(idx), inputHolder)) {
-                return idx;
-            }
-        }
-        return -1;
-    }
-
     // ---- ISubnetWorker ----
 
     @Override
@@ -206,12 +219,9 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
 
     @Override
     public boolean canAcceptInputs(KeyCounter[] inputHolder) {
-        if (level == null || state != WorkerState.FREE || !isValidWorker()) {
-            return false;
-        }
-        // Whether the machines take the inputs is decided by pushInputs: a scaled push may be split over several of them
-        var sides = machineSides();
-        return !sides.isEmpty() && inFlight.size() < BatchLogic.MAX_BATCH * sides.size();
+        // The block takes every push into its buffer (up to a limit) and hands it to the machines as they have room
+        return level != null && state == WorkerState.FREE && isValidWorker() && bufferedCrafts() < BUFFER_MAX_CRAFTS
+                && !machineSides().isEmpty();
     }
 
     /** Inputs of a single craft of {@code pattern}: key and amount. */
@@ -252,7 +262,7 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
     }
 
     /**
-     * How many crafts of {@code pattern} this block can hand to its machines in one push, summed over all of them. The
+     * How many crafts of {@code pattern} this block can hand to its machines at once, summed over all of them. The
      * Master uses it to decide how far it may scale a pattern.
      */
     public int craftCapacity(IPatternDetails pattern) {
@@ -267,78 +277,171 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
         return (int) Math.min(total, ScaleLogic.MAX_FACTOR);
     }
 
+    // ---- buffer: what the CPU pushed and the machines have not taken yet ----
+
+    /** Crafts worth of inputs that wait for room in a machine. */
+    private static final class Pending {
+        final List<GenericStack> perCraft;
+        int crafts;
+
+        Pending(List<GenericStack> perCraft, int crafts) {
+            this.perCraft = perCraft;
+            this.crafts = crafts;
+        }
+    }
+
+    private static final int BUFFER_MAX_CRAFTS = 4096;
+    private final List<Pending> buffer = new ArrayList<>();
+
+    public int bufferedCrafts() {
+        int sum = 0;
+        for (var p : buffer) {
+            sum += p.crafts;
+        }
+        return sum;
+    }
+
+    @Nullable
+    private IMasterPatternProvider findMaster() {
+        var grid = getMainNode().getGrid();
+        return grid == null ? null : SubnetMasters.find(grid);
+    }
+
     @Override
     public boolean pushInputs(IPatternDetails patternDetails, KeyCounter[] inputHolder, IMasterPatternProvider master) {
-        if (level == null || !isValidWorker()) {
+        if (level == null || !isValidWorker() || machineSides().isEmpty()) {
+            return false;
+        }
+        int factor = ScaledPattern.factorOf(patternDetails);
+        if (bufferedCrafts() + factor > BUFFER_MAX_CRAFTS) {
+            return false;
+        }
+
+        List<GenericStack> perCraft = new ArrayList<>();
+        patternDetails.pushInputsToExternalInventory(inputHolder, (what, amount) -> {
+            long per = amount / factor;
+            long rest = amount - per * factor;
+            if (per > 0) {
+                perCraft.add(new GenericStack(what, per));
+            }
+            if (rest > 0 && master != null) {
+                master.acceptReturn(what, rest); // cannot be split into whole crafts
+            }
+        });
+        if (perCraft.isEmpty()) {
+            return false;
+        }
+
+        var last = buffer.isEmpty() ? null : buffer.get(buffer.size() - 1);
+        if (last != null && last.perCraft.equals(perCraft)) {
+            last.crafts += factor;
+        } else {
+            buffer.add(new Pending(perCraft, factor));
+        }
+
+        var primary = patternDetails.getPrimaryOutput();
+        inFlight.add(primary != null ? primary.what() : null, primary != null ? primary.amount() : 0);
+        refreshWorkerState();
+        drain(); // hand over what fits right away
+        getMainNode().ifPresent((grid, node) -> grid.getTickManager().alertDevice(node));
+        return true;
+    }
+
+    /** Hands buffered crafts to the machines, spread evenly in whole crafts. @return whether anything moved */
+    private boolean drain() {
+        if (buffer.isEmpty() || level == null || !isValidWorker()) {
             return false;
         }
         var sides = machineSides();
         if (sides.isEmpty()) {
             return false;
         }
-        int factor = ScaledPattern.factorOf(patternDetails);
-        if (factor > 1) {
-            if (!pushScaled(patternDetails, inputHolder, master, sides, factor)) {
-                return false;
-            }
-        } else {
-            int idx = findMachine(sides, inputHolder);
-            if (idx < 0) {
-                return false;
-            }
-            Direction side = sides.get(idx);
-            nextSide = (idx + 1) % sides.size();
-            pushTo(side, patternDetails, inputHolder, 1, master);
-        }
+        // Start at a different machine each time so the remainders do not always go to the same one
+        java.util.Collections.rotate(sides, -(nextSide % sides.size()));
+        nextSide++;
 
-        var primary = patternDetails.getPrimaryOutput();
-        inFlight.add(primary != null ? primary.what() : null, primary != null ? primary.amount() : 0);
-        refreshWorkerState();
-        return true;
-    }
-
-    /** Splits {@code factor} crafts over the machines in whole crafts. Nothing is inserted if they do not all fit. */
-    private boolean pushScaled(IPatternDetails scaled, KeyCounter[] inputHolder, IMasterPatternProvider master,
-                               List<Direction> sides, int factor) {
-        var perCraft = perCraftInputs(ScaledPattern.unwrap(scaled));
-        int[] caps = new int[sides.size()];
-        for (int i = 0; i < caps.length; i++) {
-            caps[i] = maxCrafts(sides.get(i), perCraft, factor);
-        }
-        int[] shares = ScaleLogic.distribute(factor, caps);
-        if (shares == null) {
-            return false;
-        }
-        for (int i = 0; i < shares.length; i++) {
-            if (shares[i] > 0) {
-                pushTo(sides.get(i), scaled, inputHolder, factor, master, shares[i]);
+        boolean moved = false;
+        for (var it = buffer.iterator(); it.hasNext(); ) {
+            var pending = it.next();
+            int[] caps = new int[sides.size()];
+            long sum = 0;
+            for (int i = 0; i < caps.length; i++) {
+                caps[i] = maxCrafts(sides.get(i), pending.perCraft, pending.crafts);
+                sum += caps[i];
+            }
+            int amount = (int) Math.min(sum, pending.crafts);
+            if (amount <= 0) {
+                continue;
+            }
+            int[] shares = ScaleLogic.distribute(amount, caps);
+            if (shares == null) {
+                continue;
+            }
+            for (int i = 0; i < shares.length; i++) {
+                if (shares[i] > 0) {
+                    insertCrafts(sides.get(i), pending.perCraft, shares[i]);
+                }
+            }
+            pending.crafts -= amount;
+            moved = true;
+            if (pending.crafts <= 0) {
+                it.remove();
             }
         }
-        return true;
+        if (moved) {
+            saveChanges();
+        }
+        return moved;
     }
 
-    private void pushTo(Direction side, IPatternDetails pattern, KeyCounter[] inputHolder, int factor,
-                        IMasterPatternProvider master) {
-        pushTo(side, pattern, inputHolder, factor, master, factor);
-    }
-
-    /** Inserts {@code crafts} of {@code factor} crafts worth of {@code inputHolder} into the machine on {@code side}. */
-    private void pushTo(Direction side, IPatternDetails pattern, KeyCounter[] inputHolder, int factor,
-                        IMasterPatternProvider master, int crafts) {
-        pattern.pushInputsToExternalInventory(inputHolder, (what, amount) -> {
-            long part = factor == crafts ? amount : amount / factor * crafts;
-            if (part <= 0) {
-                return;
+    private void insertCrafts(Direction side, List<GenericStack> perCraft, int crafts) {
+        for (var in : perCraft) {
+            long part = in.amount() * crafts;
+            var target = resolveTarget(side, in.what(), part);
+            long inserted = target != null ? target.insert(in.what(), part, Actionable.MODULATE) : 0;
+            if (inserted < part) {
+                var master = findMaster();
+                if (master != null) {
+                    master.acceptReturn(in.what(), part - inserted); // never lose what the machine did not take
+                }
             }
-            var target = resolveTarget(side, what, part);
-            long inserted = target != null ? target.insert(what, part, Actionable.MODULATE) : 0;
-            if (inserted < part && master != null) {
-                master.acceptReturn(what, part - inserted); // never lose what the machine did not take
-            }
-        });
+        }
     }
 
+    /** Gives everything still in the buffer back to the network (block removed). */
+    private void returnBuffer() {
+        var master = findMaster();
+        if (master == null) {
+            return;
+        }
+        for (var p : buffer) {
+            for (var in : p.perCraft) {
+                master.acceptReturn(in.what(), in.amount() * p.crafts);
+            }
+        }
+        buffer.clear();
+    }
 
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        if (level != null && !level.isClientSide()) {
+            returnBuffer();
+        }
+        super.preRemoveSideEffects(pos, state);
+    }
+
+    @Override
+    public TickingRequest getTickingRequest(IGridNode node) {
+        return new TickingRequest(1, 20, false);
+    }
+
+    @Override
+    public TickRateModulation tickingRequest(IGridNode node, int ticksSinceLastCall) {
+        if (level == null || level.isClientSide() || buffer.isEmpty()) {
+            return TickRateModulation.SLOWER;
+        }
+        return drain() ? TickRateModulation.URGENT : TickRateModulation.SLOWER;
+    }
     @Override
     public void markFree() {
         inFlight.clear();

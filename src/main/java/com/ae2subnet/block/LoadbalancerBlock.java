@@ -68,7 +68,8 @@ public class LoadbalancerBlock extends AEBaseEntityBlock<LoadbalancerBlockEntity
         if (!level.isClientSide()) {
             int machines = be.machineSides().size();
             player.sendSystemMessage(Component.literal("§6[Subnet Loadbalancer]§r Machines: §e" + machines
-                    + "§r | Crafts: §e" + be.getInFlightCrafts() + "/" + be.capacity()));
+                    + "§r | Crafts: §e" + be.getInFlightCrafts() + "/" + be.capacity()
+                    + "§r | Buffer: §e" + be.bufferedCrafts()));
         }
         return InteractionResult.SUCCESS;
     }
