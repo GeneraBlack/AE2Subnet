@@ -17,6 +17,7 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
     private Button prevBtn;
     private Button nextBtn;
     private Button modeBtn;
+    private Button scaleBtn;
 
     private static final int HUD_LEFT = 16;
     private static final int HUD_RIGHT = 216;
@@ -53,7 +54,17 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
             }
         }).bounds(xo + 94, yo + 66, 46, 12).build();
 
+        this.scaleBtn = Button.builder(Component.literal("Auto"), b -> {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 3);
+            }
+        }).bounds(xo + 176, yo + 66, 32, 12)
+          .tooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal(
+                  "Pattern scale (mass mode): one push of the crafting CPU carries this many crafts. Off / Auto (machine capacity) / fixed upper limit.")))
+          .build();
+
         this.addRenderableWidget(prevBtn);
+        this.addRenderableWidget(scaleBtn);
         this.addRenderableWidget(nextBtn);
         this.addRenderableWidget(modeBtn);
     }
@@ -66,6 +77,12 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
         }
         if (nextBtn != null) {
             nextBtn.active = menu.currentPage < menu.maxPages - 1;
+        }
+        if (scaleBtn != null) {
+            scaleBtn.visible = menu.massMode;
+            String s = menu.scaleMode == 0 ? "Off" : menu.scaleMode == 1 ? "Auto"
+                    : "x" + com.ae2subnet.util.ScaleLogic.FIXED_LEVELS[Math.min(menu.scaleMode - 2, com.ae2subnet.util.ScaleLogic.FIXED_LEVELS.length - 1)];
+            scaleBtn.setMessage(Component.literal(s));
         }
         if (modeBtn != null) {
             modeBtn.setMessage(Component.literal(menu.massMode ? "Mass" : "Single"));

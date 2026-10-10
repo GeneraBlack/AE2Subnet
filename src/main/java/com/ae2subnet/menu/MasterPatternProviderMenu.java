@@ -145,6 +145,9 @@ public class MasterPatternProviderMenu extends AEBaseMenu {
     @GuiSync(11)
     public int collectors = 0;
 
+    @GuiSync(12)
+    public int scaleMode = 1;
+
     public MasterPatternProviderMenu(int id, Inventory playerInventory, MasterPatternProviderBlockEntity host) {
         super(ModMenuTypes.MASTER_PATTERN_PROVIDER.get(), id, playerInventory, host);
         this.host = host;
@@ -191,6 +194,7 @@ public class MasterPatternProviderMenu extends AEBaseMenu {
         if (isServerSide()) {
             boolean mass = host.isMassMode();
             this.massMode = mass;
+            this.scaleMode = host.getScaleMode();
             this.totalWorkers = 0;
             this.idleWorkers = 0;
             this.busyWorkers = 0;
@@ -234,6 +238,10 @@ public class MasterPatternProviderMenu extends AEBaseMenu {
             }
         } else if (id == 2) { // Toggle individual / mass mode
             host.toggleMassMode();
+            broadcastChanges();
+            return true;
+        } else if (id == 3) { // Cycle the pattern scale (mass mode)
+            host.cycleScaleMode();
             broadcastChanges();
             return true;
         }

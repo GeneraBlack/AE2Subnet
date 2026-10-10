@@ -12,6 +12,8 @@ All notable changes to the **AE2 Sub-Pattern Provider** mod will be documented i
 * **Single / Mass mode**: toggle in the Master GUI. A subnet is either Single (Sub-Pattern Providers) or Mass (Loadbalancer + Collector). Workers of the other mode are ignored and shown in the HUD.
 * **Loadbalancer** block: distributes inputs round-robin over all adjacent machines (items/fluids only).
 * **Collector** block: returns outputs from adjacent machines/hoppers/pipes to the Master.
+* **Pattern scaling** (mass mode): the Master offers each processing pattern as N crafts at once, so one push of the crafting CPU fills big machines. Button in the Master GUI: Off / Auto (machine capacity, learned from the Loadbalancers) / fixed limit x4-x1024. The Loadbalancer splits a push over all its machines in whole crafts.
+* Collector pulls whole stacks and ticks faster.
 * Safer auto-pull and strict full-insert checks.
 
 ## [2.1.0] - 2026-10-09
