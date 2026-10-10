@@ -34,6 +34,11 @@ public interface ISubnetWorkerService extends IGridService {
     /** True if any worker still waits for this output. */
     boolean expectsOutput(AEKey key);
 
+    /** True if any worker has crafts restored from disk that wait for an output of unknown kind. */
+    default boolean hasRestoredCrafts() {
+        return false;
+    }
+
     /** Distributes an output a collector took from a machine over the workers that wait for it. */
     void creditOutput(AEKey key, long amount);
 }

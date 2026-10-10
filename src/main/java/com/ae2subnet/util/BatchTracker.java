@@ -58,6 +58,27 @@ public final class BatchTracker<K> {
         }
     }
 
+    /** A pending craft for saving: the awaited key (null for a wildcard) and the amount still missing. */
+    public record Pending<K>(K key, long remaining) {
+    }
+
+    public List<Pending<K>> snapshot() {
+        List<Pending<K>> list = new ArrayList<>(entries.size());
+        for (var entry : entries) {
+            list.add(new Pending<>(entry.key, entry.remaining));
+        }
+        return list;
+    }
+
+    public boolean hasWildcards() {
+        for (var entry : entries) {
+            if (entry.key == null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** True if some pending craft expects exactly this output. */
     public boolean expects(K key) {
         for (var entry : entries) {

@@ -102,7 +102,7 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
                         continue;
                     }
                     var key = AEItemKey.of(resource);
-                    if (!service.expectsOutput(key)) {
+                    if (!awaited(service, key)) {
                         continue;
                     }
                     try (var tx = Transaction.openRoot()) {
@@ -122,6 +122,21 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
         if (handler != null && !list.contains(handler)) {
             list.add(handler);
         }
+    }
+
+    /**
+     * Whether a craft waits for {@code key}. Crafts restored after a reload do not know their output any more, so they
+     * accept every output of the master's patterns.
+     */
+    private boolean awaited(ISubnetWorkerService service, AEKey key) {
+        if (service.expectsOutput(key)) {
+            return true;
+        }
+        if (!service.hasRestoredCrafts()) {
+            return false;
+        }
+        var master = SubnetMasters.find(getMainNode().getGrid());
+        return master != null && master.isPatternOutput(key);
     }
 
     /** One-line state report for the right-click message. */
@@ -151,7 +166,7 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
                 var r = handler.getResource(i);
                 if (!r.isEmpty()) {
                     stacks++;
-                    if (service != null && service.expectsOutput(AEItemKey.of(r))) {
+                    if (service != null && awaited(service, AEItemKey.of(r))) {
                         expected++;
                     }
                 }

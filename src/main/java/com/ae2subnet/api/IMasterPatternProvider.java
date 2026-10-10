@@ -22,4 +22,9 @@ public interface IMasterPatternProvider {
     default boolean isMassMode() {
         return false;
     }
+
+    /** Whether {@code key} is an output of one of this provider's patterns. */
+    default boolean isPatternOutput(AEKey key) {
+        return false;
+    }
 }

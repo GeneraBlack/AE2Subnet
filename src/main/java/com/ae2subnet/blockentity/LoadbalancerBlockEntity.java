@@ -92,17 +92,29 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
     @Override
     public void saveAdditional(ValueOutput data) {
         super.saveAdditional(data);
-        data.putInt("inFlight", inFlight.size());
+        var pending = data.list("pending", GenericStack.CODEC);
+        int wildcards = 0;
+        for (var p : inFlight.snapshot()) {
+            if (p.key() == null) {
+                wildcards++;
+            } else {
+                pending.add(new GenericStack(p.key(), p.remaining()));
+            }
+        }
+        data.putInt("inFlight", wildcards); // crafts whose output is unknown (also what older versions saved)
     }
 
     @Override
     public void loadTag(ValueInput data) {
         super.loadTag(data);
-        // The expected outputs are not saved: restored crafts complete on the first output that comes back
         inFlight.clear();
+        for (var stack : data.listOrEmpty("pending", GenericStack.CODEC)) {
+            inFlight.add(stack.what(), stack.amount());
+        }
         inFlight.addWildcards(Math.max(0, data.getIntOr("inFlight", 0)));
         state = inFlight.size() >= capacity() ? WorkerState.OCCUPIED : WorkerState.FREE;
     }
+
 
     // ---- machines around this block ----
 
@@ -351,6 +363,11 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
     @Override
     public boolean isValidWorker() {
         return !isRemoved() && hasLevel() && getMainNode().isActive();
+    }
+
+    @Override
+    public boolean hasRestoredCrafts() {
+        return inFlight.hasWildcards();
     }
 
     @Override

@@ -158,6 +158,16 @@ public class SubnetWorkerService implements ISubnetWorkerService, IGridServicePr
     }
 
     @Override
+    public synchronized boolean hasRestoredCrafts() {
+        for (var w : allWorkers) {
+            if (w.hasRestoredCrafts()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     public synchronized boolean expectsOutput(AEKey key) {
         for (var w : allWorkers) {
             if (w.expectsOutput(key)) {

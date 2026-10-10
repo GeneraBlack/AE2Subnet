@@ -46,4 +46,9 @@ public interface ISubnetWorker extends IGridNodeService {
     default long creditOutput(AEKey key, long amount) {
         return 0;
     }
+
+    /** True if crafts restored from disk wait for an output of unknown kind (they accept any pattern output). */
+    default boolean hasRestoredCrafts() {
+        return false;
+    }
 }
