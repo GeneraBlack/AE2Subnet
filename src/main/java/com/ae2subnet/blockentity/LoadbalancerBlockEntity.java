@@ -317,22 +317,27 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
             return false;
         }
 
+        // The totals come straight from the CPU's input holder. The pattern's own push callback is not used: for a
+        // scaled pattern it reports per-craft amounts. Nothing may be returned to the network before the push is
+        // accepted, otherwise a refused push would duplicate items.
+        var totals = new KeyCounter();
+        for (var counter : inputHolder) {
+            totals.addAll(counter);
+        }
         List<GenericStack> perCraft = new ArrayList<>();
-        patternDetails.pushInputsToExternalInventory(inputHolder, (what, amount) -> {
-            long per = amount / factor;
-            long rest = amount - per * factor;
-            if (per > 0) {
-                perCraft.add(new GenericStack(what, per));
+        for (var entry : totals) {
+            long amount = entry.getLongValue();
+            if (amount <= 0) {
+                continue;
             }
-            if (rest > 0 && master != null) {
-                com.ae2subnet.AE2Subnet.LOGGER.info("Loadbalancer {} returns {}x {} (not divisible by {})", getBlockPos(), rest, what, factor);
-                master.acceptReturn(what, rest); // cannot be split into whole crafts
+            if (amount % factor != 0) {
+                return false; // cannot be split into whole crafts
             }
-        });
+            perCraft.add(new GenericStack(entry.getKey(), amount / factor));
+        }
         if (perCraft.isEmpty()) {
             return false;
         }
-
         var last = buffer.isEmpty() ? null : buffer.get(buffer.size() - 1);
         if (last != null && last.perCraft.equals(perCraft)) {
             last.crafts += factor;
