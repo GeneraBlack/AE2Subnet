@@ -69,6 +69,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
     private final IActionSource actionSource = new MachineSource(this::getActionableNode);
 
     private int priority = 0;
+    private boolean massMode = false;
 
     public MasterPatternProviderBlockEntity(BlockPos pos, BlockState blockState) {
         super(ModBlockEntities.MASTER_PATTERN_PROVIDER.get(), pos, blockState);
@@ -220,6 +221,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         this.patternInventory.writeToNBT(data, "patterns");
         this.upgrades.writeToNBT(data, "upgrades");
         data.putInt("priority", this.priority);
+        data.putBoolean("massMode", this.massMode);
     }
 
     @Override
@@ -229,9 +231,22 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
         this.patternInventory.readFromNBT(data, "patterns");
         this.upgrades.readFromNBT(data, "upgrades");
         this.priority = data.getIntOr("priority", 0);
+        this.massMode = data.getBooleanOr("massMode", false);
         if (hasLevel()) {
             this.updatePatterns();
         }
+    }
+
+    @Override
+    public boolean isMassMode() {
+        return massMode;
+    }
+
+    /** Switches the subnet between individual mode (Sub-Pattern Providers) and mass mode (Loadbalancer + Collector). */
+    public void toggleMassMode() {
+        this.massMode = !this.massMode;
+        saveChanges();
+        markForUpdate();
     }
 
     public void updatePatterns() {
@@ -313,7 +328,7 @@ public class MasterPatternProviderBlockEntity extends AENetworkedBlockEntity
             return true;
         }
         var service = subnetGrid.getService(ISubnetWorkerService.class);
-        return service == null || service.getIdleWorkerCount() == 0;
+        return service == null || service.getIdleWorkerCount(massMode) == 0;
     }
 
     @Override

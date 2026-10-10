@@ -14,4 +14,12 @@ public interface IMasterPatternProvider {
             acceptReturn(new GenericStack(key, amount));
         }
     }
+
+    /**
+     * True if this master runs its subnet in mass mode (Loadbalancer + Collector) instead of individual mode
+     * (Sub-Pattern Providers).
+     */
+    default boolean isMassMode() {
+        return false;
+    }
 }

@@ -16,6 +16,7 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
 
     private Button prevBtn;
     private Button nextBtn;
+    private Button modeBtn;
 
     private static final int HUD_LEFT = 16;
     private static final int HUD_RIGHT = 216;
@@ -46,8 +47,15 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
             }
         }).bounds(xo + 160, yo + 66, 14, 12).build();
 
+        this.modeBtn = Button.builder(Component.literal("Single"), b -> {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 2);
+            }
+        }).bounds(xo + 94, yo + 66, 46, 12).build();
+
         this.addRenderableWidget(prevBtn);
         this.addRenderableWidget(nextBtn);
+        this.addRenderableWidget(modeBtn);
     }
 
     @Override
@@ -58,6 +66,9 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
         }
         if (nextBtn != null) {
             nextBtn.active = menu.currentPage < menu.maxPages - 1;
+        }
+        if (modeBtn != null) {
+            modeBtn.setMessage(Component.literal(menu.massMode ? "Mass" : "Single"));
         }
     }
 
@@ -73,16 +84,24 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
     protected void extractLabels(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         // Top Header
         graphics.text(this.font, Component.literal("Master Pattern Provider"), 10, 6, 0xFFE0E0E0, false);
+        String modeStr = menu.massMode ? "Mode: §6Mass" : "Mode: §bSingle";
+        graphics.text(this.font, modeStr, HUD_RIGHT - this.font.width(modeStr), 6, 0xFFFFFFFF, false);
 
         // Telemetry HUD (left column + right-aligned column, one row each)
-        String statusStr = menu.totalWorkers > 0 ? "§a● SUBNET ONLINE" : "§c○ NO WORKERS";
+        String statusStr;
+        if (menu.massMode && menu.collectors == 0) {
+            statusStr = "§e⚠ NO COLLECTOR";
+        } else {
+            statusStr = menu.totalWorkers > 0 ? "§a● SUBNET ONLINE" : "§c○ NO WORKERS";
+        }
         graphics.text(this.font, statusStr, HUD_LEFT, 24, 0xFFFFFFFF, false);
 
         String powerStr = menu.externalEnergyConnected ? "Power: §aFE Direct" :
                 (menu.subnetPowered ? "Power: §aActive" : (menu.mainActive ? "Power: §eBridged" : "Power: §cUnpowered"));
         drawRight(graphics, powerStr, 24);
 
-        String workerCount = "Workers: §f" + menu.totalWorkers;
+        String workerCount = (menu.massMode ? "Outputs: §f" : "Workers: §f") + menu.totalWorkers
+                + (menu.foreignWorkers > 0 ? " §c+" + menu.foreignWorkers + " other" : "");
         graphics.text(this.font, workerCount, HUD_LEFT, 36, 0xFFFFFFFF, false);
 
         String workerStates = "Idle: §a" + menu.idleWorkers + " §7| Busy: §6" + menu.busyWorkers;
@@ -99,4 +118,4 @@ public class MasterPatternProviderScreen extends AbstractContainerScreen<MasterP
         graphics.text(this.font, Component.literal(pageInfo), 34, 69, 0xFF8E8E9E, false);
         graphics.text(this.font, this.playerInventoryTitle, 26, 125, 0xFF8E8E9E, false);
     }
-}
+}

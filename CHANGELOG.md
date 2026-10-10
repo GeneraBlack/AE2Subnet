@@ -4,6 +4,16 @@ All notable changes to the **AE2 Sub-Pattern Provider** mod will be documented i
 
 ---
 
+## [2.2.0] - 2026-10-10
+
+### Batch Mode, Loadbalancer & Collector
+
+* **Batch mode** (Sub-Pattern Provider): multiple crafts in flight per machine. Limit Auto (machine capacity) or 1-64 via GUI button.
+* **Single / Mass mode**: toggle in the Master GUI. A subnet is either Single (Sub-Pattern Providers) or Mass (Loadbalancer + Collector). Workers of the other mode are ignored and shown in the HUD.
+* **Loadbalancer** block: distributes inputs round-robin over all adjacent machines (items/fluids only).
+* **Collector** block: returns outputs from adjacent machines/hoppers/pipes to the Master.
+* Safer auto-pull and strict full-insert checks.
+
 ## [2.1.0] - 2026-10-09
 
 ### Major Update: Machine Energy Delivery, Capacity Expansion & GUI Overhaul

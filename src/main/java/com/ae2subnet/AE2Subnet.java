@@ -66,6 +66,28 @@ public class AE2Subnet {
                 (be, side) -> be.getFluidHandler(side)
         );
 
+        // Mass mode: loadbalancer and collector are grid nodes, the collector takes items/fluids from every side
+        event.registerBlockEntity(
+                AECapabilities.IN_WORLD_GRID_NODE_HOST,
+                ModBlockEntities.LOADBALANCER.get(),
+                (be, context) -> be
+        );
+        event.registerBlockEntity(
+                AECapabilities.IN_WORLD_GRID_NODE_HOST,
+                ModBlockEntities.COLLECTOR.get(),
+                (be, context) -> be
+        );
+        event.registerBlockEntity(
+                Capabilities.Item.BLOCK,
+                ModBlockEntities.COLLECTOR.get(),
+                (be, side) -> be.getItemHandler(side)
+        );
+        event.registerBlockEntity(
+                Capabilities.Fluid.BLOCK,
+                ModBlockEntities.COLLECTOR.get(),
+                (be, side) -> be.getFluidHandler(side)
+        );
+
         // Energy capabilities (FE supply & high-power input)
         event.registerBlockEntity(
                 Capabilities.Energy.BLOCK,
@@ -88,6 +110,14 @@ public class AE2Subnet {
             AEBaseBlockEntity.registerBlockEntityItem(
                     ModBlockEntities.SUB_PATTERN_PROVIDER.get(),
                     ModItems.SUB_PATTERN_PROVIDER.get()
+            );
+            AEBaseBlockEntity.registerBlockEntityItem(
+                    ModBlockEntities.LOADBALANCER.get(),
+                    ModItems.LOADBALANCER.get()
+            );
+            AEBaseBlockEntity.registerBlockEntityItem(
+                    ModBlockEntities.COLLECTOR.get(),
+                    ModItems.COLLECTOR.get()
             );
 
             // Register Capacity Card upgrades for Master Pattern Provider

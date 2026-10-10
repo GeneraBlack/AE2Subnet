@@ -1,6 +1,8 @@
 package com.ae2subnet.init;
 
 import com.ae2subnet.AE2Subnet;
+import com.ae2subnet.block.CollectorBlock;
+import com.ae2subnet.block.LoadbalancerBlock;
 import com.ae2subnet.block.MasterPatternProviderBlock;
 import com.ae2subnet.block.SubPatternProviderBlock;
 import net.minecraft.world.level.block.Block;
@@ -25,6 +27,24 @@ public class ModBlocks {
     public static final DeferredBlock<SubPatternProviderBlock> SUB_PATTERN_PROVIDER = BLOCKS.registerBlock(
             "sub_pattern_provider",
             SubPatternProviderBlock::new,
+            props -> props
+                    .strength(2.2f, 11.0f)
+                    .sound(SoundType.METAL)
+                    .requiresCorrectToolForDrops()
+    );
+
+    public static final DeferredBlock<LoadbalancerBlock> LOADBALANCER = BLOCKS.registerBlock(
+            "subnet_loadbalancer",
+            LoadbalancerBlock::new,
+            props -> props
+                    .strength(2.2f, 11.0f)
+                    .sound(SoundType.METAL)
+                    .requiresCorrectToolForDrops()
+    );
+
+    public static final DeferredBlock<CollectorBlock> COLLECTOR = BLOCKS.registerBlock(
+            "subnet_collector",
+            CollectorBlock::new,
             props -> props
                     .strength(2.2f, 11.0f)
                     .sound(SoundType.METAL)

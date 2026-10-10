@@ -4,6 +4,7 @@ import appeng.api.crafting.IPatternDetails;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridServiceProvider;
+import appeng.api.stacks.AEKey;
 import appeng.api.stacks.KeyCounter;
 import com.ae2subnet.api.IMasterPatternProvider;
 import com.ae2subnet.api.ISubnetWorker;
@@ -71,6 +72,10 @@ public class SubnetWorkerService implements ISubnetWorkerService, IGridServicePr
     @Nullable
     public synchronized ISubnetWorker findAndClaimWorker(IPatternDetails patternDetails, KeyCounter[] inputHolder, IMasterPatternProvider master) {
         for (var worker : new ArrayList<>(allWorkers)) {
+            // A subnet runs either in individual or in mass mode: workers of the other mode stay untouched
+            if (master != null && worker.isMassWorker() != master.isMassMode()) {
+                continue;
+            }
             if (worker.isValidWorker() && worker.getWorkerState() == WorkerState.FREE) {
                 if (worker.canAcceptInputs(inputHolder)) {
                     boolean success = worker.pushInputs(patternDetails, inputHolder, master);
@@ -118,4 +123,58 @@ public class SubnetWorkerService implements ISubnetWorkerService, IGridServicePr
         }
         return count;
     }
-}
+
+    @Override
+    public synchronized int getTotalWorkerCount(boolean mass) {
+        int count = 0;
+        for (var w : allWorkers) {
+            if (!w.isRemoved() && w.isMassWorker() == mass) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Override
+    public synchronized int getIdleWorkerCount(boolean mass) {
+        int count = 0;
+        for (var w : allWorkers) {
+            if (w.isMassWorker() == mass && w.isValidWorker() && w.getWorkerState() == WorkerState.FREE) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Override
+    public synchronized int getBusyWorkerCount(boolean mass) {
+        int count = 0;
+        for (var w : allWorkers) {
+            if (w.isMassWorker() == mass && w.isValidWorker() && w.getWorkerState() == WorkerState.OCCUPIED) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    @Override
+    public synchronized boolean expectsOutput(AEKey key) {
+        for (var w : allWorkers) {
+            if (w.expectsOutput(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public synchronized void creditOutput(AEKey key, long amount) {
+        long left = amount;
+        for (var w : new ArrayList<>(allWorkers)) {
+            if (left <= 0) {
+                return;
+            }
+            left -= Math.max(0, w.creditOutput(key, left));
+        }
+    }
+}

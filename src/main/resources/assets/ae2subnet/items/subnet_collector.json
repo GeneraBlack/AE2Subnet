@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "ae2subnet:item/subnet_collector"
+  }
+}

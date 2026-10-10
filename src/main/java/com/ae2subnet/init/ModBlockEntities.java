@@ -1,6 +1,8 @@
 package com.ae2subnet.init;
 
 import com.ae2subnet.AE2Subnet;
+import com.ae2subnet.blockentity.CollectorBlockEntity;
+import com.ae2subnet.blockentity.LoadbalancerBlockEntity;
 import com.ae2subnet.blockentity.MasterPatternProviderBlockEntity;
 import com.ae2subnet.blockentity.SubPatternProviderBlockEntity;
 import net.minecraft.core.registries.Registries;
@@ -39,6 +41,36 @@ public class ModBlockEntities {
                         type,
                         null,
                         (level, pos, state, entity) -> entity.serverTick()
+                );
+                return type;
+            });
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LoadbalancerBlockEntity>> LOADBALANCER =
+            BLOCK_ENTITIES.register("subnet_loadbalancer", () -> {
+                var type = new BlockEntityType<>(
+                        LoadbalancerBlockEntity::new,
+                        ModBlocks.LOADBALANCER.get()
+                );
+                ModBlocks.LOADBALANCER.get().setBlockEntity(
+                        LoadbalancerBlockEntity.class,
+                        type,
+                        null,
+                        null
+                );
+                return type;
+            });
+
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CollectorBlockEntity>> COLLECTOR =
+            BLOCK_ENTITIES.register("subnet_collector", () -> {
+                var type = new BlockEntityType<>(
+                        CollectorBlockEntity::new,
+                        ModBlocks.COLLECTOR.get()
+                );
+                ModBlocks.COLLECTOR.get().setBlockEntity(
+                        CollectorBlockEntity.class,
+                        type,
+                        null,
+                        null
                 );
                 return type;
             });

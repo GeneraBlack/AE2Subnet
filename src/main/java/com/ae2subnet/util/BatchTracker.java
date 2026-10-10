@@ -69,6 +69,43 @@ public final class BatchTracker<K> {
     }
 
     /**
+     * Books an output delivered by someone else (e.g. a collector) strictly against matching expectations. Unlike
+     * {@link #returned} nothing happens if no pending craft expects this key.
+     *
+     * @return the part of {@code amount} that was booked here
+     */
+    public long creditExpected(K key, long amount) {
+        if (amount <= 0 || key == null) {
+            return 0;
+        }
+        long left = amount;
+        for (int i = 0; i < entries.size() && left > 0; ) {
+            var entry = entries.get(i);
+            if (entry.key != null && Objects.equals(entry.key, key)) {
+                long take = Math.min(entry.remaining, left);
+                entry.remaining -= take;
+                left -= take;
+                if (entry.remaining <= 0) {
+                    entries.remove(i);
+                    continue;
+                }
+            }
+            i++;
+        }
+        long booked = amount - left;
+        if (booked == 0) {
+            // Crafts restored from disk have no expectation: any delivery completes one of them
+            for (int i = 0; i < entries.size(); i++) {
+                if (entries.get(i).key == null) {
+                    entries.remove(i);
+                    return amount;
+                }
+            }
+        }
+        return booked;
+    }
+
+    /**
      * Books a returned output.
      *
      * @return number of crafts that are completed by it
