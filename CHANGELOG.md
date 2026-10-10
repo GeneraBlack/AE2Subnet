@@ -10,12 +10,13 @@ All notable changes to the **AE2 Sub-Pattern Provider** mod will be documented i
 
 * **Batch mode** (Sub-Pattern Provider): multiple crafts in flight per machine. Limit Auto (machine capacity) or 1-64 via GUI button.
 * **Single / Mass mode**: toggle in the Master GUI. A subnet is either Single (Sub-Pattern Providers) or Mass (Loadbalancer + Collector). Workers of the other mode are ignored and shown in the HUD.
-* **Loadbalancer** block: distributes inputs round-robin over all adjacent machines (items/fluids only).
-* **Collector** block: returns outputs from adjacent machines/hoppers/pipes to the Master.
-* **Pattern scaling** (mass mode): the Master offers each processing pattern as N crafts at once, so one push of the crafting CPU fills big machines. Button in the Master GUI: Off / Auto (machine capacity, learned from the Loadbalancers) / fixed limit x4-x1024. The Loadbalancer splits a push over all its machines in whole crafts.
-* Collector pulls whole stacks and ticks faster.
+* **Loadbalancer** block: takes every push into a buffer and feeds all adjacent machines; touching Loadbalancers form one wall and share each push over all their machines. Items are inserted only through the face that touches the machine.
+* **Collector** block: returns expected outputs and byproducts from the touching face of adjacent machines (or from hoppers/pipes) to the Master. Right-click shows diagnostics. Pending outputs survive world reloads.
+* **Pattern scaling** (mass mode): the Master offers each processing pattern as N crafts at once, so one push of the crafting CPU fills big machines. Button in the Master GUI: Off / Auto (machine capacity, learned from the Loadbalancers) / fixed limit x4-x1024.
+* **Upgrade tooltips**: Capacity and Energy Cards (and our providers) explain what the cards do.
 * Safer auto-pull and strict full-insert checks.
 
+---
 ## [2.1.0] - 2026-10-09
 
 ### Major Update: Machine Energy Delivery, Capacity Expansion & GUI Overhaul
