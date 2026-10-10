@@ -4,6 +4,12 @@ All notable changes to the **AE2 Sub-Pattern Provider** mod will be documented i
 
 ---
 
+## [1.2.2] - 2026-10-11
+
+* **Fix**: Sub-Pattern Providers and Collectors now pull fluid outputs from machines (e.g. Oritech), not only items.
+
+---
+
 ## [1.2.1] - 2026-10-10
 
 * **Fix**: Loadbalancer and Collector recipes were not loaded on 1.21.1 (ingredients now use the 1.21.1 format).
