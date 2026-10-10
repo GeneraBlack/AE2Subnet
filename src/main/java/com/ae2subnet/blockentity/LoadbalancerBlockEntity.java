@@ -338,6 +338,10 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
         if (perCraft.isEmpty()) {
             return false;
         }
+        var primary = patternDetails.getPrimaryOutput();
+        AEKey outKey = primary != null ? primary.what() : null;
+        long outPerCraft = primary != null ? primary.amount() / factor : 0;
+
         // The Loadbalancers that touch each other form one structure: a push is shared by all of them in proportion
         // to the machines each one feeds, so no machine of the wall stays idle
         List<LoadbalancerBlockEntity> pool = new ArrayList<>();
@@ -373,24 +377,26 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
         nextSide++;
         for (int i = 0; i < shares.length; i++) {
             if (shares[i] > 0) {
-                pool.get(i).acceptShare(perCraft, shares[i]);
+                pool.get(i).acceptShare(perCraft, shares[i], outKey, outPerCraft);
             }
         }
-        var primary = patternDetails.getPrimaryOutput();
-        inFlight.add(primary != null ? primary.what() : null, primary != null ? primary.amount() : 0);
         refreshWorkerState();
         return true;
     }
 
     /** Takes {@code crafts} crafts worth of inputs into the buffer; the machines get them as soon as they have room. */
-    private void acceptShare(List<GenericStack> perCraft, int crafts) {
+    private void acceptShare(List<GenericStack> perCraft, int crafts, AEKey outKey, long outPerCraft) {
         var last = buffer.isEmpty() ? null : buffer.get(buffer.size() - 1);
         if (last != null && last.perCraft.equals(perCraft)) {
             last.crafts += crafts;
         } else {
             buffer.add(new Pending(new ArrayList<>(perCraft), crafts));
         }
-        saveChanges();
+        // Every craft of the share waits for its own output, so the status shows what this block really works on
+        for (int i = 0; i < crafts; i++) {
+            inFlight.add(outKey, outPerCraft);
+        }
+        refreshWorkerState();
         drain(); // hand over what fits right away
         getMainNode().ifPresent((g, node) -> g.getTickManager().alertDevice(node));
     }
