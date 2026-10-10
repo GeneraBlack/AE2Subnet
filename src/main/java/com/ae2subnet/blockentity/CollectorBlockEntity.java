@@ -62,6 +62,7 @@ public class CollectorBlockEntity extends AENetworkedBlockEntity implements IGri
         if (master == null || !master.isMassMode()) {
             return false;
         }
+        com.ae2subnet.AE2Subnet.LOGGER.info("Collector {} delivers {}x {}", getBlockPos(), amount, key);
         master.acceptReturn(key, amount);
         var service = grid.getService(ISubnetWorkerService.class);
         if (service != null) {

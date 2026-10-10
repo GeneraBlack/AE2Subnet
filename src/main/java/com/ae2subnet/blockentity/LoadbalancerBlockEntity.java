@@ -325,6 +325,7 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
                 perCraft.add(new GenericStack(what, per));
             }
             if (rest > 0 && master != null) {
+                com.ae2subnet.AE2Subnet.LOGGER.info("Loadbalancer {} returns {}x {} (not divisible by {})", getBlockPos(), rest, what, factor);
                 master.acceptReturn(what, rest); // cannot be split into whole crafts
             }
         });
@@ -337,6 +338,7 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
             last.crafts += factor;
         } else {
             buffer.add(new Pending(perCraft, factor));
+            com.ae2subnet.AE2Subnet.LOGGER.info("Loadbalancer {} buffered {} crafts: {}", getBlockPos(), factor, perCraft);
         }
 
         var primary = patternDetails.getPrimaryOutput();
@@ -402,6 +404,7 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
             if (inserted < part) {
                 var master = findMaster();
                 if (master != null) {
+                    com.ae2subnet.AE2Subnet.LOGGER.info("Loadbalancer {} returns {}x {} (machine took {} of {})", getBlockPos(), part - inserted, in.what(), inserted, part);
                     master.acceptReturn(in.what(), part - inserted); // never lose what the machine did not take
                 }
             }
@@ -416,6 +419,7 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
         }
         for (var p : buffer) {
             for (var in : p.perCraft) {
+                com.ae2subnet.AE2Subnet.LOGGER.info("Loadbalancer {} returns buffer {}x {}", getBlockPos(), in.amount() * p.crafts, in.what());
                 master.acceptReturn(in.what(), in.amount() * p.crafts);
             }
         }
