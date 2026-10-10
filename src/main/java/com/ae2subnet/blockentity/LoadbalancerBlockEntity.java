@@ -156,19 +156,16 @@ public class LoadbalancerBlockEntity extends AENetworkedBlockEntity implements I
     private PatternProviderTarget resolveTarget(Direction side, AEKey what, long amount) {
         BlockPos machinePos = getBlockPos().relative(side);
         Direction face = side.getOpposite();
+        // Only the touching face: the machine decides there which slots take the item. Other faces or the unsided
+        // view can reach fuel and output slots (a log would be burned as furnace fuel).
         var sided = PatternProviderTarget.get(level, machinePos, null, face, actionSource);
-        if (sided != null && sided.insert(what, amount, Actionable.SIMULATE) >= amount) {
-            return sided;
+        if (sided != null) {
+            return sided.insert(what, amount, Actionable.SIMULATE) >= amount ? sided : null;
         }
+        // Machines without any sided view of their own
         var unsided = PatternProviderTarget.get(level, machinePos, null, null, actionSource);
         if (unsided != null && unsided.insert(what, amount, Actionable.SIMULATE) >= amount) {
             return unsided;
-        }
-        for (Direction d : Direction.values()) {
-            var other = PatternProviderTarget.get(level, machinePos, null, d, actionSource);
-            if (other != null && other.insert(what, amount, Actionable.SIMULATE) >= amount) {
-                return other;
-            }
         }
         return null;
     }
